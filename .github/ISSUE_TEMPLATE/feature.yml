@@ -23,7 +23,7 @@ body:
       options:
         - label: Will not vendor or copy baseline source.
           required: true
-        - label: Will not reference sibling brands (lumina-st, aether-3d, factorgraph-st).
+        - label: Will not reference unrelated sibling-project brands.
           required: true
         - label: Will not claim performance vs baselines without local-test evidence.
           required: true
