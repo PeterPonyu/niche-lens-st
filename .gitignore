@@ -12,6 +12,9 @@ __pycache__/
 baseline_repos/*
 !baseline_repos/README.md
 
+# OMC runtime state (created if tooling is invoked with this repo as cwd)
+.omc/
+
 # Generated outputs
 results/*
 !results/README.md
