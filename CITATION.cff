@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use NicheLens-ST, please cite this repository."
+title: "NicheLens-ST"
+abstract: "Contrastive graph learning of cellular niches in spatial transcriptomics."
+authors:
+  - family-names: Fu
+    given-names: Zeyu
+    alias: PeterPonyu
+repository-code: "https://github.com/PeterPonyu/niche-lens-st"
+license: MIT
+version: 0.0.0.dev0
+date-released: 2026-05-27
