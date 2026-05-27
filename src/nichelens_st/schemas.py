@@ -27,12 +27,16 @@ def validate_inputs(
     """
     if X.ndim != 2:
         raise SchemaError(f"X must be 2D; got ndim={X.ndim}")
+    if X.dtype != np.float32:
+        raise SchemaError(f"X must be float32; got {X.dtype}")
     n_cells = X.shape[0]
 
     if coords.ndim != 2 or coords.shape[1] not in (2, 3):
         raise SchemaError(
             f"coords must be (n_cells, 2) or (n_cells, 3); got shape={coords.shape}"
         )
+    if coords.dtype != np.float32:
+        raise SchemaError(f"coords must be float32; got {coords.dtype}")
     if coords.shape[0] != n_cells:
         raise SchemaError(
             f"coords n_cells={coords.shape[0]} != X n_cells={n_cells}"
@@ -47,8 +51,8 @@ def validate_inputs(
 
     if edges.ndim != 2 or edges.shape[0] != 2:
         raise SchemaError(f"edges must be (2, n_edges); got shape={edges.shape}")
-    if edges.dtype.kind not in ("i", "u"):
-        raise SchemaError(f"edges must be integer dtype; got {edges.dtype}")
+    if edges.dtype != np.int64:
+        raise SchemaError(f"edges must be int64; got {edges.dtype}")
     if edges.size and (edges.min() < 0 or edges.max() >= n_cells):
         raise SchemaError("edges contain indices outside [0, n_cells)")
 
@@ -66,6 +70,8 @@ def validate_outputs(
     """
     if H.ndim != 2 or H.shape[0] != n_cells:
         raise SchemaError(f"H must be (n_cells, d); got shape={H.shape}")
+    if H.dtype != np.float32:
+        raise SchemaError(f"H must be float32; got {H.dtype}")
     if H.shape[1] < 1:
         raise SchemaError(f"H embedding dim must be >= 1; got {H.shape[1]}")
 
@@ -73,9 +79,9 @@ def validate_outputs(
         raise SchemaError(
             f"prototype_id must be (n_cells,); got shape={prototype_id.shape}"
         )
-    if prototype_id.dtype.kind not in ("i", "u"):
+    if prototype_id.dtype != np.int64:
         raise SchemaError(
-            f"prototype_id must be integer dtype; got {prototype_id.dtype}"
+            f"prototype_id must be int64; got {prototype_id.dtype}"
         )
     if prototype_id.size and prototype_id.min() < 0:
         raise SchemaError("prototype_id must be non-negative")

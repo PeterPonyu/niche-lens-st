@@ -1,0 +1,42 @@
+Metadata-Version: 2.4
+Name: nichelens-st
+Version: 0.0.0.dev0
+Summary: Contrastive graph learning of cellular niches in spatial transcriptomics.
+Author-email: PeterPonyu <fuzeyu09@gmail.com>
+License: MIT
+Project-URL: Homepage, https://github.com/PeterPonyu/niche-lens-st
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Provides-Extra: test
+Requires-Dist: pytest<9,>=8; extra == "test"
+Requires-Dist: numpy<3,>=1.26; extra == "test"
+
+# NicheLens-ST
+
+NicheLens-ST is an independent spatial-transcriptomics method project for learning interpretable cellular niche and tissue-microenvironment representations from spatial neighborhood graphs.
+
+## Scientific focus
+
+The project centers on a future contrastive graph/subgraph model that represents each local cellular neighborhood as a niche token, separates conserved niche prototypes from sample-specific variants, and exposes interpretable marker and interaction summaries.
+
+## Baseline references
+
+- Primary reference implementation for comparison and design pressure: CellNiche (`Super-LzzZ/CellNiche`).
+- Secondary contrastive communication reference: scComm (`ZijieJin/scComm`).
+
+These repositories are treated as prior-art baselines. NicheLens-ST must keep its own naming, APIs, prose, figures, schemas, and claims independent.
+
+## First-pass repository scope
+
+- Baseline provenance lives in `BASELINE_REFERENCES.md`.
+- Claim gates live in `CLAIM_LEDGER.md`.
+- Baseline checkout commands live in `baseline_repos/README.md`; third-party code is not vendored.
+- Draft review notes live in `manuscript/DRAFT.md` and `docs/DRAFT_REVIEW_SUMMARY.md`.
+
+## Non-goals
+
+- Not a missing-gene imputation or denoising project.
+- Not a 3D reconstruction project.
+- Not a benchmark-only clustering comparison.
+- Not histology-first.
+- Not dependent on paired protein/ATAC/histology modalities.

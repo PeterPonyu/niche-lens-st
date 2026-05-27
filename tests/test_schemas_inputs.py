@@ -45,6 +45,18 @@ def test_coords_n_cells_mismatch():
         validate_inputs(**kw)
 
 
+def test_X_wrong_dtype():
+    kw = _ok()
+    kw["X"] = np.zeros((6, 4), dtype=np.float64)
+    with pytest.raises(SchemaError, match="X must be float32"):
+        validate_inputs(**kw)
+
+def test_coords_wrong_dtype():
+    kw = _ok()
+    kw["coords"] = np.zeros((6, 2), dtype=np.float64)
+    with pytest.raises(SchemaError, match="coords must be float32"):
+        validate_inputs(**kw)
+
 def test_section_id_wrong_dtype():
     kw = _ok()
     kw["section_id"] = np.zeros(6, dtype=np.float32)
@@ -69,5 +81,11 @@ def test_edges_out_of_range():
 def test_edges_wrong_dtype():
     kw = _ok()
     kw["edges"] = np.zeros((2, 3), dtype=np.float32)
-    with pytest.raises(SchemaError, match="edges must be integer"):
+    with pytest.raises(SchemaError, match="edges must be int64"):
+        validate_inputs(**kw)
+
+def test_edges_int32_rejected():
+    kw = _ok()
+    kw["edges"] = np.zeros((2, 3), dtype=np.int32)
+    with pytest.raises(SchemaError, match="edges must be int64"):
         validate_inputs(**kw)
