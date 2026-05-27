@@ -1,0 +1,23 @@
+# Python/cache artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local environments and baseline checkouts
+.venv/
+.env
+.external_baselines/
+baseline_repos/*
+!baseline_repos/README.md
+
+# Generated outputs
+results/*
+!results/README.md
+manuscript/*.aux
+manuscript/*.bbl
+manuscript/*.blg
+manuscript/*.log
+manuscript/*.out
+manuscript/*.pdf
