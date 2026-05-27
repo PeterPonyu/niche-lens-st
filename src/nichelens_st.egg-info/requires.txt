@@ -1,0 +1,4 @@
+
+[test]
+pytest<9,>=8
+numpy<3,>=1.26
