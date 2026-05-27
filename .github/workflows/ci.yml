@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  independence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Brand / leakage scan
+        run: bash scripts/check_independence.sh
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package if pyproject.toml exists
+        run: |
+          if [ -f pyproject.toml ]; then
+            python -m pip install --upgrade pip
+            python -m pip install -e ".[test]"
+          else
+            echo "No pyproject.toml; skipping package install."
+          fi
+
+      - name: Run pytest if test files exist
+        run: |
+          if find tests -name 'test_*.py' -print -quit 2>/dev/null | grep -q .; then
+            python -m pytest -q
+          else
+            echo "No test_*.py files yet; skipping pytest."
+          fi
