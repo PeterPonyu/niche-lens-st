@@ -1,9 +1,12 @@
-# Python/cache artifacts
+# Python/cache + build artifacts
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+*.egg-info/
+build/
+dist/
 
 # Local environments and baseline checkouts
 .venv/
