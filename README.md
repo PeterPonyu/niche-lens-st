@@ -11,7 +11,7 @@ The project centers on a future contrastive graph/subgraph model that represents
 - Primary reference implementation for comparison and design pressure: CellNiche (`Super-LzzZ/CellNiche`).
 - Secondary contrastive communication reference: scComm (`ZijieJin/scComm`).
 
-These repositories are treated as prior-art baselines. NicheLens-ST must keep its own naming, APIs, prose, figures, schemas, and claims independent.
+These repositories are treated as prior-art baselines. NicheLens-ST must keep its own naming, APIs, prose, figures, schemas, and claims independent. Files permitted to mention these names are enumerated in [`docs/ALLOWED_BASELINE_CONTEXTS.md`](docs/ALLOWED_BASELINE_CONTEXTS.md).
 
 ## First-pass repository scope
 

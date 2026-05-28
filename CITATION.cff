@@ -10,3 +10,9 @@ repository-code: "https://github.com/PeterPonyu/niche-lens-st"
 license: MIT
 version: 0.0.0.dev0
 date-released: 2026-05-27
+keywords:
+  - spatial transcriptomics
+  - graph neural networks
+  - cellular niches
+  - contrastive learning
+  - tissue microenvironment

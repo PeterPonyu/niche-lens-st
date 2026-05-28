@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "nichelens-st"
 version = "0.0.0.dev0"
-description = "Contrastive graph learning of cellular niches in spatial transcriptomics."
+description = "NicheLens-ST: contrastive graph learning of cellular niches in spatial transcriptomics."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
