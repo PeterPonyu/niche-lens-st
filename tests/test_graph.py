@@ -15,6 +15,46 @@ def test_build_graph_shape_dtype_and_per_section():
     validate_inputs(X, coords, section_id, edges)
 
 
+def test_coincident_coords_no_self_loop():
+    """Regression for #60: coincident/tied coordinates must not produce
+    self-loops or drop a real neighbor. ``cKDTree.query`` can return the
+    duplicate instead of self in column 0 when distances tie, so a
+    positional ``nn_local[:, 1:]`` slice silently keeps ``(i, i)`` and
+    drops cell i's real nearest neighbor.
+    """
+    coords = np.array([[0, 0], [0, 0], [1, 0], [5, 0]], dtype=np.float32)
+    section_id = np.zeros(4, dtype=np.int64)
+    edges = build_graph(coords, section_id, k=1)
+    pairs = edges.T.tolist()
+    # No self-loops anywhere.
+    assert not any(s == d for s, d in pairs), (
+        f"self-loop emitted: {[(s, d) for s, d in pairs if s == d]}"
+    )
+    # Coincident cells 0 and 1 must each get a real neighbor (each other).
+    pair_set = set(map(tuple, pairs))
+    assert (0, 1) in pair_set, f"cell 0 lost its real neighbor; got {pair_set}"
+    assert (1, 0) in pair_set, f"cell 1 lost its real neighbor; got {pair_set}"
+
+
+def test_coincident_coords_full_k_neighbors():
+    """All four cells share coords with k=2: each cell must still get
+    k=2 real (non-self) neighbors. Without the self-mask fix, ties on
+    column 0 caused k-1 retained neighbors plus a self-loop.
+    """
+    coords = np.zeros((4, 2), dtype=np.float32)  # all coincident
+    section_id = np.zeros(4, dtype=np.int64)
+    edges = build_graph(coords, section_id, k=2)
+    assert edges.shape == (2, 4 * 2)
+    pairs = edges.T.tolist()
+    assert not any(s == d for s, d in pairs), "self-loop with coincident coords"
+    # Each source should have exactly k=2 distinct neighbors.
+    from collections import Counter
+
+    counts = Counter(s for s, _ in pairs)
+    for src, cnt in counts.items():
+        assert cnt == 2, f"cell {src} has {cnt} neighbors; expected k=2"
+
+
 def test_build_graph_tiny_knn_correctness_and_singleton():
     coords = np.array([[0, 0], [1, 0], [5, 0], [0, 0]], dtype=np.float32)
     section_id = np.array([0, 0, 0, 1], dtype=np.int64)
