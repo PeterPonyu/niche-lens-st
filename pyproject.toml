@@ -31,3 +31,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# src-layout: make `python -m pytest` work on a fresh checkout without
+# requiring `pip install -e .` first (issue #79). pytest >= 8 (declared
+# above) honors `pythonpath` natively.
+pythonpath = ["src"]
