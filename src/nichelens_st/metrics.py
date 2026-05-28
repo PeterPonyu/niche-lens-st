@@ -5,6 +5,7 @@ from __future__ import annotations
 from math import comb
 
 import numpy as np
+from scipy.optimize import linear_sum_assignment
 
 
 def adjusted_rand(pred_id: np.ndarray, true_id: np.ndarray) -> float:
@@ -100,3 +101,53 @@ def marker_recall_at_k(
         pred_top = set(pred[:k])
         recalls.append(len(pred_top.intersection(true_top)) / len(true_top))
     return float(np.mean(recalls))
+
+
+def score_against_truth(
+    pred_prototype_id: np.ndarray,
+    pred_marker_table: list[list[int]],
+    pred_proto_kind: list[str],
+    true_prototype_id: np.ndarray,
+    true_marker_genes: list[list[int]],
+    section_id: np.ndarray,
+    edges: np.ndarray,
+    k: int = 5,
+) -> dict[str, float]:
+    """Score model output against synthetic ground truth (issues #81/#82).
+
+    ARI is label-permutation-invariant; marker recall is computed after
+    Hungarian-aligning predicted prototypes to truth via the contingency
+    overlap so per-prototype marker lists are compared on matched
+    indices. Unmatched truth prototypes contribute empty pred markers
+    (recall 0). Required so the harness scores the *fitted model's
+    output* — not truth-vs-truth as in #81.
+    """
+    pred_id = np.asarray(pred_prototype_id, dtype=np.int64)
+    true_id = np.asarray(true_prototype_id, dtype=np.int64)
+    n_true = len(true_marker_genes)
+    truth_to_pred: dict[int, int] = {}
+    if pred_id.size:
+        n_pred = int(pred_id.max()) + 1
+        n_true_ids = int(true_id.max()) + 1
+        contingency = np.zeros((n_pred, n_true_ids), dtype=np.int64)
+        np.add.at(contingency, (pred_id, true_id), 1)
+        # Hungarian minimises cost; negate counts to maximise overlap.
+        row_ind, col_ind = linear_sum_assignment(-contingency)
+        truth_to_pred = {int(t): int(p) for p, t in zip(row_ind, col_ind)}
+    aligned_pred_markers: list[list[int]] = []
+    for t in range(n_true):
+        p = truth_to_pred.get(t)
+        if p is None or p >= len(pred_marker_table):
+            aligned_pred_markers.append([])
+        else:
+            aligned_pred_markers.append(pred_marker_table[p])
+    return {
+        "ARI": adjusted_rand(pred_id, true_id),
+        "MoranI": morans_i(pred_id, edges),
+        "section_overlap_rate": section_overlap_rate(
+            pred_id, section_id, pred_proto_kind
+        ),
+        "marker_recall_at_k": marker_recall_at_k(
+            aligned_pred_markers, true_marker_genes, k=k
+        ),
+    }

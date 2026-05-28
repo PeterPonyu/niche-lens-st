@@ -36,7 +36,7 @@ plus k-means initialization), so a fixed seed yields identical ``prototype_id``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -64,6 +64,7 @@ class NicheModelConfig:
     edge_drop: float = 0.2
     n_prototypes: int = 10
     kmeans_iters: int = 50
+    marker_top_k: int = 5  # per-prototype markers reported on the result (#82).
     seed: int = 0
 
     def encoder_config(self) -> EncoderConfig:
@@ -87,6 +88,9 @@ class NicheModelResult:
     H: np.ndarray            # (n_cells, d) float32
     prototype_id: np.ndarray  # (n_cells,) int64 non-negative
     proto_kind: list[str]     # per-prototype tag in {conserved, sample_specific}
+    # Per-prototype top-k gene indices by mean X (issue #82). Empty by
+    # default for back-compat with callers that build the result directly.
+    marker_table: list[list[int]] = field(default_factory=list)
 
 
 def _kmeans(
@@ -162,6 +166,26 @@ def _separation_head(
     return kinds
 
 
+def _compute_marker_table(
+    X: np.ndarray, prototype_id: np.ndarray, n_protos: int, top_k: int
+) -> list[list[int]]:
+    """Per-prototype top-``top_k`` gene indices ranked by mean X (issue #82)."""
+    if top_k < 1:
+        raise ValueError(f"marker_top_k must be >= 1; got {top_k}")
+    Xa = np.asarray(X)
+    n_genes = Xa.shape[1] if Xa.ndim == 2 else 0
+    k = min(top_k, n_genes)
+    table: list[list[int]] = []
+    for p in range(n_protos):
+        members = Xa[prototype_id == p]
+        if members.size == 0 or k == 0:
+            table.append([])
+            continue
+        order = np.argsort(-members.mean(axis=0), kind="stable")[:k]
+        table.append([int(g) for g in order])
+    return table
+
+
 def fit_niche_model(
     X: np.ndarray,
     coords: np.ndarray,
@@ -196,4 +220,12 @@ def fit_niche_model(
     # 3) Separation head: conserved vs sample_specific by cross-section presence.
     proto_kind = _separation_head(prototype_id, section_id, n_protos)
 
-    return NicheModelResult(H=H, prototype_id=prototype_id, proto_kind=proto_kind)
+    # 4) Per-prototype marker table (issue #82).
+    marker_table = _compute_marker_table(X, prototype_id, n_protos, cfg.marker_top_k)
+
+    return NicheModelResult(
+        H=H,
+        prototype_id=prototype_id,
+        proto_kind=proto_kind,
+        marker_table=marker_table,
+    )
