@@ -89,3 +89,31 @@ def test_edges_int32_rejected():
     kw["edges"] = np.zeros((2, 3), dtype=np.int32)
     with pytest.raises(SchemaError, match="edges must be int64"):
         validate_inputs(**kw)
+
+
+def test_empty_edges_pass():
+    kw = _ok()
+    kw["edges"] = np.zeros((2, 0), dtype=np.int64)
+    validate_inputs(**kw)
+
+
+def test_cross_section_edge_rejected():
+    kw = _ok()
+    kw["section_id"] = np.array([0, 0, 0, 1, 1, 1], dtype=np.int64)
+    kw["edges"] = np.array([[0, 1], [4, 5]], dtype=np.int64)
+    with pytest.raises(SchemaError, match="within section"):
+        validate_inputs(**kw)
+
+
+def test_nonfinite_X_rejected():
+    kw = _ok()
+    kw["X"][0, 0] = np.nan
+    with pytest.raises(SchemaError, match="NaN or Inf"):
+        validate_inputs(**kw)
+
+
+def test_nonfinite_coords_rejected():
+    kw = _ok()
+    kw["coords"][0, 0] = np.inf
+    with pytest.raises(SchemaError, match="NaN or Inf"):
+        validate_inputs(**kw)

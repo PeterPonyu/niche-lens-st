@@ -9,7 +9,7 @@ Status: design document. All biology and performance claims remain planned until
 | `X` cell features | `(n_cells, n_genes)` | float32, dense or CSR | Per-cell expression for one section. |
 | `coords` | `(n_cells, 2)` or `(n_cells, 3)` | float32 | Section-local coordinates. |
 | `section_id` | `(n_cells,)` | int | Section/sample index. |
-| `edges` | `(2, n_edges)` | int64 COO | k-NN or Delaunay graph over `coords`, built per section. |
+| `edges` | `(2, n_edges)` | int64 COO | k-NN or Delaunay graph over `coords`, built per section; cross-section edges are invalid. |
 
 ## Outputs
 
@@ -17,13 +17,13 @@ Status: design document. All biology and performance claims remain planned until
 |---|---|---|---|
 | `H` niche embedding | `(n_cells, d)` | float32 | Cell-centered subgraph embedding; `d` configurable. |
 | `prototype_id` | `(n_cells,)` | int | Assignment to a global niche-prototype index. |
-| `proto_kind` | `(n_protos,)` | enum `{conserved, sample_specific}` | Per-prototype tag. |
+| `proto_kind` | `(n_protos,)` | enum `{conserved, sample_specific}` | Per-prototype tag over the global catalog; catalog entries may be unassigned in a sample, but every observed `prototype_id` must index into this catalog. |
 | `marker_table` | DataFrame | str / float | Per-prototype top-k marker genes with scores. |
 | `interaction_summary` | DataFrame | str / float | Per-prototype ligand-receptor or interaction score summary. |
 
 ## Subgraph contract
 
-For cell `i`, the cell-centered subgraph is the induced subgraph of `edges` over the k-hop neighborhood of `i` together with `i`. Default `k = 1`; configurable.
+For cell `i`, the cell-centered subgraph is the induced subgraph of `edges` over the k-hop neighborhood of `i` together with `i`. Default `k = 1`; configurable. The public extraction helper treats edges as undirected neighborhood links and returns original node ids in the induced edge list.
 
 ## Acceptance matrix
 
