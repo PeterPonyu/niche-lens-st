@@ -35,6 +35,8 @@ def build_graph(
         raise GraphError(f"coords must be (n_cells, 2) or (n_cells, 3); got {coords.shape}")
     if section_id.ndim != 1 or section_id.shape[0] != coords.shape[0]:
         raise GraphError(f"section_id must be (n_cells,); got {section_id.shape}")
+    if not np.isfinite(coords).all():
+        raise GraphError("coords contains NaN or Inf")
     if coords.shape[0] == 0 or k == 0:
         return np.zeros((2, 0), dtype=np.int64)
 

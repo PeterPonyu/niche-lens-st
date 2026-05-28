@@ -27,6 +27,15 @@ def test_build_graph_rejects_unknown_method():
         build_graph(np.zeros((1, 2), np.float32), np.zeros(1, np.int64), method="bad")
 
 
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
+def test_build_graph_rejects_non_finite_coords(bad):
+    coords = np.array([[0, 0], [1, 0], [3, 0]], dtype=np.float32)
+    section_id = np.zeros(3, dtype=np.int64)
+    coords[1, 0] = bad
+    with pytest.raises(GraphError, match="NaN or Inf"):
+        build_graph(coords, section_id, k=1)
+
+
 def test_extract_subgraph_k_hops_and_isolated():
     edges = np.array([[0, 1, 2, 3], [1, 2, 3, 4]], dtype=np.int64)
     nodes0, sub0 = extract_subgraph(edges, center=2, k_hop=0)
