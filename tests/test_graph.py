@@ -59,3 +59,4 @@ def test_extract_subgraphs_batches_with_shared_adjacency():
     got = extract_subgraphs(edges, [0, 2], k_hop=1)
     np.testing.assert_array_equal(got[0][0], np.array([0, 1], dtype=np.int64))
     np.testing.assert_array_equal(got[1][0], np.array([1, 2], dtype=np.int64))
+
