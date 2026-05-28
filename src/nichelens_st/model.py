@@ -41,6 +41,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from nichelens_st.encoder import TORCH_AVAILABLE, EncoderConfig, train_embeddings
+from nichelens_st.schemas import validate_inputs
 
 __all__ = [
     "TORCH_AVAILABLE",
@@ -204,11 +205,11 @@ def fit_niche_model(
     extra / torch is not installed.
     """
     cfg = config or NicheModelConfig()
+    # Validate the full input contract up front so callers get a clear
+    # SchemaError (out-of-range / cross-section edges, non-float32 X, etc.)
+    # instead of a deep torch IndexError from index_add_ (issue #62).
+    validate_inputs(X, coords, section_id, edges)
     section_id = np.asarray(section_id)
-    if section_id.ndim != 1 or section_id.shape[0] != X.shape[0]:
-        raise ValueError(
-            f"section_id must be (n_cells,); got shape={section_id.shape}"
-        )
 
     # 1) Contrastive niche embeddings (torch; gated).
     H = train_embeddings(X, edges, cfg.encoder_config())
