@@ -154,8 +154,15 @@ def _separation_head(
 
     Conserved iff the prototype's assigned cells span every section; otherwise
     sample_specific. Mirrors the synthetic ground-truth definition.
+
+    With a single section the conserved/sample_specific distinction is
+    undefined (``seen == all_sections`` is trivially true for every populated
+    prototype), so we tag everything ``"unknown"`` to surface the degeneracy
+    instead of confidently asserting all-conserved (issue #85).
     """
     all_sections = set(np.asarray(section_id).tolist())
+    if len(all_sections) < 2:
+        return ["unknown"] * n_protos
     kinds: list[str] = []
     for p in range(n_protos):
         seen = set(section_id[prototype_id == p].tolist())
