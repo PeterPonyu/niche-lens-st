@@ -54,3 +54,19 @@ def test_zero_j_specific_skips_specific_protos():
     )
     assert len(inst.proto_kind) == 3
     assert "sample_specific" not in inst.proto_kind
+
+
+def test_marker_genes_match_proto_mean_top_genes():
+    inst = generate_instance(
+        n_sections=2,
+        n_cells_per_section=20,
+        n_genes=12,
+        K_conserved=3,
+        J_specific=1,
+        k_nn=3,
+        seed=0,
+    )
+    assert inst.proto_means is not None
+    for p, markers in enumerate(inst.marker_genes):
+        expected = list(map(int, np.argsort(inst.proto_means[p])[-5:][::-1]))
+        assert markers == expected

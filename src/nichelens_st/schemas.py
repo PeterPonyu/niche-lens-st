@@ -29,6 +29,8 @@ def validate_inputs(
         raise SchemaError(f"X must be 2D; got ndim={X.ndim}")
     if X.dtype != np.float32:
         raise SchemaError(f"X must be float32; got {X.dtype}")
+    if not np.isfinite(X).all():
+        raise SchemaError("X contains NaN or Inf")
     n_cells = X.shape[0]
 
     if coords.ndim != 2 or coords.shape[1] not in (2, 3):
@@ -37,6 +39,8 @@ def validate_inputs(
         )
     if coords.dtype != np.float32:
         raise SchemaError(f"coords must be float32; got {coords.dtype}")
+    if not np.isfinite(coords).all():
+        raise SchemaError("coords contains NaN or Inf")
     if coords.shape[0] != n_cells:
         raise SchemaError(
             f"coords n_cells={coords.shape[0]} != X n_cells={n_cells}"
@@ -55,6 +59,19 @@ def validate_inputs(
         raise SchemaError(f"edges must be int64; got {edges.dtype}")
     if edges.size and (edges.min() < 0 or edges.max() >= n_cells):
         raise SchemaError("edges contain indices outside [0, n_cells)")
+    if edges.size:
+        src_sections = section_id[edges[0]]
+        dst_sections = section_id[edges[1]]
+        cross = np.flatnonzero(src_sections != dst_sections)
+        if cross.size:
+            pos = int(cross[0])
+            src = int(edges[0, pos])
+            dst = int(edges[1, pos])
+            raise SchemaError(
+                "edges must stay within section; "
+                f"edge {pos} connects {src} (section {section_id[src]}) to "
+                f"{dst} (section {section_id[dst]})"
+            )
 
 
 def validate_outputs(
@@ -86,10 +103,11 @@ def validate_outputs(
     if prototype_id.size and prototype_id.min() < 0:
         raise SchemaError("prototype_id must be non-negative")
 
-    n_protos = int(prototype_id.max()) + 1 if prototype_id.size else 0
-    if len(proto_kind) != n_protos:
+    min_catalog = int(prototype_id.max()) + 1 if prototype_id.size else 0
+    if len(proto_kind) < min_catalog:
         raise SchemaError(
-            f"proto_kind length {len(proto_kind)} != observed n_protos {n_protos}"
+            f"proto_kind length {len(proto_kind)} does not cover observed prototype_id "
+            f"max {min_catalog - 1}"
         )
     bad = [k for k in proto_kind if k not in VALID_PROTO_KIND]
     if bad:
