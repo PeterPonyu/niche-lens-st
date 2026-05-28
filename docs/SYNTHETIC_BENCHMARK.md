@@ -4,7 +4,7 @@ Status: spec document. Defines how evidence will be collected. No performance is
 
 ## Generator
 
-Synthetic instances have `K_conserved` niche prototypes shared across all sections and `J_specific` variants present in a subset of sections.
+Synthetic instances have `K_conserved` niche prototypes shared across all sections and `J_specific` variants present in a subset of sections. When a section has at least as many cells as its allowed prototypes, the generator seeds at least one cell for every allowed prototype before random assignment so conserved prototypes are represented in each section.
 
 ### Generator parameters
 
@@ -17,6 +17,7 @@ Synthetic instances have `K_conserved` niche prototypes shared across all sectio
 | `J_specific` | 2 | 0-10 | Variants present in a subset of sections. |
 | `noise_sigma` | 0.5 | 0-2 | Gaussian noise on expression. |
 | `seed` | 0 | any int | Deterministic regeneration. |
+| `k_nn` | 8 | >=0 | Per-section outgoing nearest neighbors; effective k is clamped to `min(k_nn, cells_in_section - 1)`, so singleton sections emit zero edges. |
 
 ### Saved artifacts (per instance)
 
@@ -35,7 +36,7 @@ Synthetic instances have `K_conserved` niche prototypes shared across all sectio
 | Metric | What it locks | Pass gate |
 |---|---|---|
 | ARI(`prototype_id`, truth) | Niche recovery vs ground truth. | set when first run lands |
-| Moran's I over `prototype_id` | Spatial coherence of recovered niches. | set when first run lands |
+| Moran's I over `prototype_id` | Spatial coherence of recovered niches over graph edges. | set when first run lands |
 | Section-overlap rate per `proto_kind` | Conserved vs sample-specific tagging accuracy. | set when first run lands |
 | Marker recall@k vs truth | Marker recovery. | set when first run lands |
 

@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "PeterPonyu", email = "fuzeyu09@gmail.com" }]
-dependencies = ["numpy>=1.26,<3"]
+dependencies = ["numpy>=1.26,<3", "scipy>=1.11,<2"]
 
 [project.optional-dependencies]
 test = ["pytest>=8,<9"]
