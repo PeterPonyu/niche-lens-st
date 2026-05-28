@@ -34,7 +34,12 @@ jobs:
         run: |
           if [ -f pyproject.toml ]; then
             python -m pip install --upgrade pip
-            python -m pip install -e ".[test]"
+            # Install the CPU-only torch wheel first so the [model] extra does
+            # not pull the large CUDA build, then install the package with the
+            # model + test extras so the torch-backed encoder tests actually run
+            # in CI instead of being skipped.
+            python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+            python -m pip install -e ".[model,test]"
           else
             echo "No pyproject.toml; skipping package install."
           fi
