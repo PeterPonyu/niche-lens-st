@@ -14,6 +14,13 @@ dependencies = ["numpy>=1.26,<3", "scipy>=1.11,<2"]
 
 [project.optional-dependencies]
 test = ["pytest>=8,<9"]
+# Optional deep-learning extra for the contrastive niche encoder
+# (nichelens_st.model / nichelens_st.encoder). The base package stays
+# dependency-light (numpy/scipy) and imports without torch; the encoder import
+# is gated and raises a clear error only when the model is actually run.
+# torch-geometric / jax are intentionally NOT used: message passing is
+# expressed with plain-torch scatter (index_add_) over the subgraph edge lists.
+model = ["torch>=2,<3"]
 
 [project.urls]
 Homepage = "https://github.com/PeterPonyu/niche-lens-st"
