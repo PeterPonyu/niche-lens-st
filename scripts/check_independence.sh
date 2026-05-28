@@ -62,3 +62,18 @@ if ! grep -qE '^keywords:' CITATION.cff 2>/dev/null; then
 fi
 
 echo "PASS: brand-metadata fields present in pyproject.toml and CITATION.cff."
+
+# Issue #23 (schema-level): validate CITATION.cff structure if cffconvert is
+# available. The grep checks above cover content; cffconvert checks the file
+# parses as a valid CFF document. Skipped (not failed) when cffconvert is not
+# installed so the script remains usable in minimal local environments.
+if command -v cffconvert >/dev/null 2>&1; then
+    if ! cffconvert --validate >/dev/null 2>&1; then
+        echo "FAIL: cffconvert --validate did not accept CITATION.cff." >&2
+        cffconvert --validate >&2 || true
+        exit 1
+    fi
+    echo "PASS: CITATION.cff parses as a valid CFF document (cffconvert)."
+else
+    echo "INFO: cffconvert not installed; skipping schema validation locally." >&2
+fi

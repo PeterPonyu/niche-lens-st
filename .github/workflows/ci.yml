@@ -11,7 +11,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Brand / leakage scan
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install cffconvert
+        run: python -m pip install --upgrade pip cffconvert
+      - name: Brand / leakage scan (incl. cffconvert --validate)
         run: bash scripts/check_independence.sh
 
   tests:
