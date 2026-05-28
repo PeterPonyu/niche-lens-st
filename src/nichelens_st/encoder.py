@@ -203,6 +203,8 @@ def train_embeddings(
     _require_torch()
     if X.ndim != 2:
         raise ValueError(f"X must be 2D; got ndim={X.ndim}")
+    if not config.tau > 0:
+        raise ValueError(f"tau must be > 0; got {config.tau}")
 
     # Bit-reproducible training: single-threaded CPU + deterministic reductions
     # so ``index_add_`` (scatter) yields identical results across runs of the

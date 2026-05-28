@@ -10,6 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from nichelens_st.encoder import EncoderConfig, train_embeddings
 from nichelens_st.model import TORCH_AVAILABLE, NicheModelConfig, fit_niche_model
 from nichelens_st.schemas import VALID_PROTO_KIND, validate_outputs
 from nichelens_st.synth import generate_instance
@@ -17,6 +18,14 @@ from nichelens_st.synth import generate_instance
 pytestmark = pytest.mark.skipif(
     not TORCH_AVAILABLE, reason="requires the optional [model] extra (torch)"
 )
+
+
+@pytest.mark.parametrize("tau", [0.0, -0.1])
+def test_train_embeddings_rejects_non_positive_tau(tau):
+    X = np.zeros((4, 3), dtype=np.float32)
+    edges = np.array([[0, 1], [1, 2]], dtype=np.int64)
+    with pytest.raises(ValueError, match="tau must be > 0"):
+        train_embeddings(X, edges, EncoderConfig(tau=tau, epochs=1))
 
 
 def _small_instance(seed: int = 0):
