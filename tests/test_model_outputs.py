@@ -10,7 +10,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from nichelens_st.encoder import EncoderConfig, train_embeddings
+from nichelens_st.encoder import (
+    _INFO_NCE_TAU_MIN,
+    EncoderConfig,
+    _info_nce,
+    train_embeddings,
+)
 from nichelens_st.model import TORCH_AVAILABLE, NicheModelConfig, fit_niche_model
 from nichelens_st.schemas import VALID_PROTO_KIND, validate_outputs
 from nichelens_st.synth import generate_instance
@@ -26,6 +31,30 @@ def test_train_embeddings_rejects_non_positive_tau(tau):
     edges = np.array([[0, 1], [1, 2]], dtype=np.int64)
     with pytest.raises(ValueError, match="tau must be > 0"):
         train_embeddings(X, edges, EncoderConfig(tau=tau, epochs=1))
+
+
+def test_tau_tiny_no_overflow_f32():
+    """#88: a positive but tiny tau (< _INFO_NCE_TAU_MIN) must not let
+    ``z @ z.t() / tau`` overflow float32 and NaN-out the loss. The
+    clamp in ``_info_nce`` bounds tau at ``_INFO_NCE_TAU_MIN``.
+    """
+    import torch  # local import; module is gated on TORCH_AVAILABLE.
+
+    torch.manual_seed(0)
+    n, d = 8, 16
+    z1 = torch.nn.functional.normalize(
+        torch.randn(n, d, dtype=torch.float32), dim=1
+    )
+    z2 = torch.nn.functional.normalize(
+        torch.randn(n, d, dtype=torch.float32), dim=1
+    )
+    # tau orders of magnitude below the clamp threshold; without the
+    # clamp `sim / tau` overflows float32 and softmax → NaN.
+    loss = _info_nce(z1, z2, tau=1e-8)
+    assert torch.isfinite(loss).item(), (
+        f"InfoNCE loss not finite for tiny tau (got {float(loss)}); "
+        f"clamp at _INFO_NCE_TAU_MIN={_INFO_NCE_TAU_MIN} regressed."
+    )
 
 
 def _small_instance(seed: int = 0):

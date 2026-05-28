@@ -162,11 +162,26 @@ def _augment(
     return x_aug, edge_aug
 
 
+_INFO_NCE_TAU_MIN: float = 1e-4
+"""Lower bound for InfoNCE ``tau`` (issue #88). Below this value
+``z @ z.t() / tau`` overflows float32 and softmax in cross-entropy
+degenerates to NaN. ``train_embeddings`` rejects ``tau <= 0`` with a
+``ValueError``; this constant bounds the positive range against silent
+underflow corruption."""
+
+
 def _info_nce(z1: "Tensor", z2: "Tensor", tau: float) -> "Tensor":
-    """NT-Xent / InfoNCE loss over two aligned views of the same nodes."""
+    """NT-Xent / InfoNCE loss over two aligned views of the same nodes.
+
+    ``tau`` is clamped to ``[_INFO_NCE_TAU_MIN, +inf)`` so a tiny user
+    setting cannot make ``sim = z @ z.t() / tau`` overflow float32 and
+    NaN-out the softmax/cross-entropy. ``tau <= 0`` is rejected upstream
+    in :func:`train_embeddings` (issue #88).
+    """
+    safe_tau = max(float(tau), _INFO_NCE_TAU_MIN)
     n = z1.shape[0]
     z = torch.cat([z1, z2], dim=0)  # (2n, d), already L2-normalized
-    sim = z @ z.t() / tau
+    sim = z @ z.t() / safe_tau
     # Mask self-similarity.
     diag = torch.eye(2 * n, dtype=torch.bool, device=z.device)
     sim = sim.masked_fill(diag, float("-inf"))
