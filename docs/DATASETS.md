@@ -140,3 +140,52 @@ verified GEO `RAW.tar` bundles.)
   known errors (notably GSE223561 liver-regeneration mislabel) and are not used.
 - Each integrated dataset must land a `data/cards/<dataset_id>.yaml` card and a
   row in this table; large downloads stay opt-in and never run in CI/smoke.
+
+---
+
+## Extended validation datasets
+
+This section records (a) the **raw-count verification verdict** for every dataset
+already tracked as a `data` issue, and (b) **focused expansion** datasets that
+close niche-validation gaps. All verdicts were re-checked against the canonical
+registry and the distributing source's own file listing (2026-05-28). Policy is
+unchanged: **raw integer count matrices + spatial metadata only**.
+
+Legend: ✅ raw counts + single-cell boundaries/transcripts confirmed ·
+⚠️ raw counts confirmed but caveated (access-gated, or spot-resolution = no cell
+boundaries) · ❌ not a raw count matrix (none found — no replacements required).
+
+### Verification verdicts (existing issues)
+
+| Issue | Dataset | Reg # | Platform | Raw-count artifact (verified) | Boundaries / transcripts | Verdict |
+|-------|---------|-------|----------|-------------------------------|--------------------------|---------|
+| #37 | Xenium Human Skin / Dermal Melanoma | 9 / 10 | Xenium | `cell_feature_matrix.h5` (+ MEX) raw counts, 377-plex, ~68k+90k cells | `cell_boundaries.parquet` + `nucleus_boundaries.parquet` + `transcripts.parquet` + `cells.parquet` | ✅ (direct `.h5` hotlink ⚠️ — resolve from page) |
+| #38 | Xenium Human Breast (Janesick) | 11 | Xenium | `cell_feature_matrix.h5` raw counts, 313-plex (280+33), ~110–170k cells | full boundary + transcript bundle | ✅ |
+| #39 | CosMx Human NSCLC | 12 | CosMx SMI | `*_exprMat_file.csv` raw cell-by-gene, 960-plex, >800k cells | `*_metadata_file.csv` centroids + `fov`, `*_tx_file.csv`, cell polygons | ✅ (Lung9_Rep1 S3 wired) |
+| #40 | CosMx Human Brain (Frontal Cortex) | 13 | CosMx SMI | `exprMat` raw counts, 6,078-plex (WTx), ~194k cells | metadata centroids/`fov` + polygons + tx | ⚠️ form-gated (name/email; no anonymous URL) |
+| #41 | MERFISH Mouse Brain Receptor Map | 14 | MERFISH | `..._cell_by_gene_S#R#.csv` raw counts, 483-plex, 734,696 cells, 9 slices | `..._cell_metadata` centroids + boundary polygons + detected transcripts | ✅ (direct `hubfs` hotlink ⚠️ — resolve from page) |
+| #42 | GSE208253 OSCC Visium | 15 | Visium v1 | 12× `filtered_feature_bc_matrix.h5` raw **spot** counts (RAW.tar 153 MB) | `tissue_positions_list.csv` only — **no cell boundaries** | ⚠️ spot-resolution → secondary/robustness only |
+| #43 | GSE293199 TNBC Xenium | 18 | Xenium | Xenium output bundle raw counts, 280-plex (`RAW.tar` 13.6 GB) | `cell_boundaries`/`nucleus_boundaries` + `transcripts` | ✅ (start from ~3 GB subset) |
+
+> **Outcome:** all seven distribute genuine **raw integer** count matrices — **0 ❌**, so no
+> replacements were filed. #40 (form-gated) and #42 (spot-resolution, no boundaries)
+> remain usable with the caveats above; #42 stays a cross-platform robustness check
+> only, never a primary single-cell niche source. Per-issue evidence and exact file
+> names are recorded as comments on issues #37–#43.
+
+### New expansion datasets (focused, raw-count verified)
+
+| Issue | Dataset | Platform | Tissue / why it fits | Raw-count artifact + geometry | Access |
+|-------|---------|----------|----------------------|-------------------------------|--------|
+| #45 | Xenium Human **Lymph Node** (Multi-Tissue & Cancer panel) | Xenium | Healthy lymphoid organ → **immune/germinal-centre niches** (missing axis); clean conserved-niche positive control | `cell_feature_matrix.h5` raw counts (377-plex, **377,985 cells**) + `cell_boundaries`/`nucleus_boundaries` + `transcripts` | ✅ open 10x page, CC BY 4.0 (direct hotlink ⚠️ — resolve from page) |
+| #46 | Allen **ABC Atlas — Zhuang MERFISH** whole mouse brain (Zhang 2023) | MERFISH | **Atlas-scale, 100s of serial sections** (e.g. Zhuang-ABCA-1: 1122-plex, 4.2 M cells, 147 sections) → premier conserved-niche-across-sections test | `.h5ad` raw cell-by-gene counts + metadata (`x,y` centroids, `z`, `brain_section_label`) + CCF coords | ✅ open **AWS S3 Public Dataset**, CC BY 4.0 (no gating) |
+| #47 | Vizgen **MERFISH FFPE Human Immuno-Oncology** | MERFISH | **16 samples × 8 human tumor types** under one 500-gene IO panel → conserved vs. indication-specific tumor-immune niches | `cell_by_gene.csv` raw counts (500-plex, ~9 M cells) + `cell_metadata.csv` centroids + boundary polygons + detected transcripts | ⚠️ Vizgen Data Release Program (registration); resolve per-sample URLs from portal |
+
+> **Rationale:** these three add the gaps the current corpus misses — a healthy
+> **lymphoid/immune** organ (#45), an **atlas-scale multi-section** brain for
+> cross-section conserved-niche stability (#46, the only fully-open AWS pull of the
+> three), and a **human multi-cancer immuno-oncology** panel (#47). Each was
+> verified to distribute a raw integer count matrix with single-cell centroids
+> (and, except the MERFISH centroid-only cases, segmentation polygons + transcript
+> coordinates) before filing. Ingestion follows the same contract above; no new
+> abstractions. Large/registration-gated pulls stay opt-in and never run in CI.
