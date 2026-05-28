@@ -64,3 +64,31 @@ def test_proto_kind_length_mismatch():
     proto = np.array([0, 1, 2], dtype=np.int64)
     with pytest.raises(SchemaError, match="proto_kind length"):
         validate_outputs(H, proto, ["conserved"], n)
+
+
+def test_proto_kind_catalog_larger_than_observed_passes():
+    n = 4
+    H = np.zeros((n, 2), dtype=np.float32)
+    proto = np.array([0, 1, 1, 0], dtype=np.int64)
+    validate_outputs(H, proto, ["conserved", "conserved", "sample_specific"], n)
+
+
+def test_holey_prototype_indexing_passes_when_catalog_covers_max_id():
+    n = 3
+    H = np.zeros((n, 2), dtype=np.float32)
+    proto = np.array([0, 2, 2], dtype=np.int64)
+    validate_outputs(H, proto, ["conserved", "sample_specific", "sample_specific"], n)
+
+
+def test_observed_prototype_id_out_of_catalog_fails():
+    n = 3
+    H = np.zeros((n, 2), dtype=np.float32)
+    proto = np.array([0, 2, 2], dtype=np.int64)
+    with pytest.raises(SchemaError, match="does not cover"):
+        validate_outputs(H, proto, ["conserved", "sample_specific"], n)
+
+
+def test_zero_cell_outputs_empty_catalog_pass():
+    H = np.zeros((0, 2), dtype=np.float32)
+    proto = np.zeros(0, dtype=np.int64)
+    validate_outputs(H, proto, [], 0)
