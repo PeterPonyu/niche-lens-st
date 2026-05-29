@@ -168,6 +168,25 @@ DATASETS: dict[str, Dataset] = {
         notes="Healthy lymphoid organ -> germinal-centre/T-zone/B-follicle niches "
         "(immune axis). CC BY 4.0. Direct .h5 hotlink UNVERIFIED -- resolve from page.",
     ),
+    "xenium_prime_5k_cancer": Dataset(
+        id="xenium_prime_5k_cancer",
+        name="Xenium Prime 5K human cancer cohort (Pan Tissue & Pathways panel)",
+        platform="Xenium Prime",
+        tissue="skin melanoma / breast / ovarian / cervical cancer",
+        issues=(48,),
+        url_status="verified_page",
+        page_url="https://www.10xgenomics.com/datasets/xenium-prime-ffpe-human-skin",
+        reader="squidpy.read.xenium",
+        citation_key="tenx_xenium_prime_5k_2024",
+        raw_count_artifact="cell_feature_matrix.zarr.zip / .h5 raw counts, ~5,006-plex",
+        raw_count_policy=RAW_COUNT_POLICY,
+        contract=_XENIUM_CONTRACT,
+        size="~5,006-plex (skin) / ~5,100-plex (breast); 112,551 (skin) / 699,110 (breast) cells",
+        notes="Upgrades #37/#38: ~13-16x plex jump (XOA v3.0.0), CC BY 4.0. Cohort members "
+        "(extra section_id samples): skin melanoma, breast, ovarian (FF), cervical (FFPE). "
+        "Per-file hotlinks UNVERIFIED -- pull the Xenium Output Bundle from each page.",
+        aliases=("xenium-prime-ffpe-human-breast-cancer", "xenium-prime-fresh-frozen-human-ovary"),
+    ),
     # ---- CosMx SMI ------------------------------------------------------
     "cosmx_nsclc_nanostring": Dataset(
         id="cosmx_nsclc_nanostring",
