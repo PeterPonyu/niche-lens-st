@@ -1,0 +1,21 @@
+id: xenium_skin_melanoma
+name: Xenium Human Skin / Dermal Melanoma (Multi-Tissue & Cancer panel)
+platform: Xenium
+tissue: skin / dermal melanoma
+issues: [#37]
+url_status: verified_page
+page_url: "https://www.10xgenomics.com/datasets/human-skin-data-xenium-human-multi-tissue-and-cancer-panel"
+direct_url: null
+reader: squidpy.read.xenium
+citation_key: tenx_xenium_skin_2023
+size: 377 genes; 150k-250k cells; 0.5-3 GB
+raw_count_artifact: cell_feature_matrix.h5 (+ MEX), 377-plex, ~68k+90k cells
+raw_count_policy: raw integer count matrix + spatial metadata only; no FASTQ / WSI / normalized-only objects
+contract:
+  X: cell_feature_matrix.h5 / .zarr.zip — raw integer cell x gene counts (float32 on load)
+  coords: cells.parquet / cell_boundaries.parquet segmentation centroids (float32)
+  section_id: per-region / per-sample integer codes (multi-region -> distinct sections)
+  edges: build_graph(coords, section_id, k, 'knn') int64; no cross-section edges
+  labels: derived cluster / annotation (optional, for prototype evaluation)
+  transcripts: transcripts.parquet transcript coordinates (QC / sub-cellular)
+notes: "Direct .h5 hotlink UNVERIFIED -- resolve Output Bundle from the page. Superseded at higher plex by Xenium Prime 5K (#48)."
