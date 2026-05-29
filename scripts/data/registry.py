@@ -151,6 +151,23 @@ DATASETS: dict[str, Dataset] = {
         notes="Lung9_Rep1 distributed via NanoString/Bruker public S3. Per-FOV section_id. "
         "Resolve the Lung9_Rep1 flat-file bundle URL from the dataset page before download.",
     ),
+    "cosmx_brain_frontal_cortex": Dataset(
+        id="cosmx_brain_frontal_cortex",
+        name="CosMx Human Brain (Frontal Cortex, WTx)",
+        platform="CosMx SMI",
+        tissue="frontal cortex FFPE",
+        issues=(40,),
+        url_status="gated",
+        page_url="https://www.brukerspatialbiology.com/",
+        reader="squidpy.read.nanostring",
+        citation_key="bruker_cosmx_brain_2024",
+        raw_count_artifact="exprMat raw counts, 6,078-plex (WTx), ~194k cells",
+        raw_count_policy=RAW_COUNT_POLICY,
+        contract=_COSMX_CONTRACT,
+        size="6,078-plex; ~194k cells; ~3 GB",
+        notes="Form-gated (name/email) at brukerspatialbiology.com; no anonymous URL. "
+        "Download manually, then point the reader at the extracted directory.",
+    ),
 }
 
 
