@@ -29,3 +29,14 @@ def test_model_extra_declares_torch():
     pyproject = tomllib.loads((root / "pyproject.toml").read_text())
     model = pyproject["project"].get("optional-dependencies", {}).get("model", [])
     assert any(dep.lower().startswith("torch") for dep in model), model
+
+
+def test_data_extra_declares_squidpy_and_scanpy():
+    """Issue #71: the data-ingestion path imports squidpy/scanpy, so a ``data``
+    extra must exist to make that path installable (``pip install .[data]``)."""
+    root = pathlib.Path(__file__).resolve().parents[1]
+    pyproject = tomllib.loads((root / "pyproject.toml").read_text())
+    data = pyproject["project"].get("optional-dependencies", {}).get("data", [])
+    names = [dep.lower() for dep in data]
+    assert any(n.startswith("squidpy") for n in names), data
+    assert any(n.startswith("scanpy") for n in names), data

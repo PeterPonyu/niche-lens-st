@@ -5,6 +5,7 @@ Schema mirrors ``docs/SYNTHETIC_BENCHMARK.md``.
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
@@ -32,6 +33,7 @@ def generate_instance(
     J_specific: int = 2,
     noise_sigma: float = 0.5,
     k_nn: int = 8,
+    n_markers: int = 5,
     seed: int = 0,
 ) -> SynthInstance:
     """Build one synthetic niche-recovery instance.
@@ -39,6 +41,11 @@ def generate_instance(
     Section ``s`` always contains all conserved prototypes plus exactly one
     sample-specific prototype (index ``K_conserved + (s % J_specific)``) when
     ``J_specific > 0``.
+
+    ``n_markers`` sets the number of ground-truth marker genes emitted per
+    prototype. It must be at least the largest ``k`` at which
+    :func:`nichelens_st.metrics.marker_recall_at_k` will be evaluated, otherwise
+    recall@k would silently degrade to recall@n_markers.
     """
     if n_sections < 1:
         raise ValueError(f"n_sections must be >= 1; got {n_sections}")
@@ -52,6 +59,23 @@ def generate_instance(
         raise ValueError("at least one prototype is required")
     if k_nn < 0:
         raise ValueError(f"k_nn must be non-negative; got {k_nn}")
+    if n_markers < 1:
+        raise ValueError(f"n_markers must be >= 1; got {n_markers}")
+
+    # Section ``s`` assigns the sample-specific prototype
+    # ``K_conserved + (s % J_specific)``, so the indices
+    # ``K_conserved + n_sections .. K_conserved + J_specific - 1`` would never
+    # be assigned to any cell and would appear as phantom catalog entries
+    # (issue #72). Clip ``J_specific`` to the number of sections so the
+    # catalog matches the realised assignments.
+    if J_specific > n_sections:
+        warnings.warn(
+            f"J_specific={J_specific} > n_sections={n_sections}; clipping to "
+            f"{n_sections} so every sample_specific prototype is realised "
+            "(issue #72)",
+            stacklevel=2,
+        )
+        J_specific = n_sections
 
     rng = np.random.default_rng(seed)
     n_cells = n_sections * n_cells_per_section
@@ -84,7 +108,8 @@ def generate_instance(
     edges = build_graph(coords, section_id, k=k_nn, method="knn")
 
     marker_genes = [
-        list(map(int, np.argsort(proto_means[p])[-5:][::-1])) for p in range(n_protos)
+        list(map(int, np.argsort(proto_means[p])[-n_markers:][::-1]))
+        for p in range(n_protos)
     ]
 
     return SynthInstance(
