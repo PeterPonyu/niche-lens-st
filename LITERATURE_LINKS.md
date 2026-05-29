@@ -23,6 +23,7 @@ guessed DOI.
 | #46 | `zhang2023abcatlas` | Zhang et al. (Zhuang lab), "Molecularly defined and spatially resolved cell atlas of the whole mouse brain", *Nature* (2023). | https://doi.org/10.1038/s41586-023-06808-9 | ✅ DOI from issue #46 |
 | #47 | `vizgen_ffpe_io_2022` | Vizgen MERFISH FFPE Human Immuno-Oncology Data Release (16 samples × 8 tumor types, 500-plex). | https://vizgen.com/human-ffpe-immunooncology-release-roadmap/ | ⚠️ data release (registration) |
 | #48 | `tenx_xenium_prime_5k_2024` | 10x Genomics — Xenium Prime 5K Human Pan Tissue & Pathways panel public datasets (2024, CC BY 4.0). | https://www.10xgenomics.com/datasets/xenium-prime-ffpe-human-skin | ⚠️ data release (no single paper) |
+| #49 | `cosmx_wtx_18933plex_2024` | "Sub-cellular Imaging of the Entire Protein-Coding Human Transcriptome (18933-plex) … using Spatial Molecular Imaging", *bioRxiv* 2024.11.27.625536. | https://doi.org/10.1101/2024.11.27.625536 | ✅ preprint ID from issue #49 |
 
 ## Notes
 
