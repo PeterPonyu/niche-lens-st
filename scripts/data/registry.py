@@ -133,6 +133,24 @@ DATASETS: dict[str, Dataset] = {
         size="313 genes; ~110-170k cells; 0.4-1.5 GB (full outs 8-9 GB)",
         notes="Canonical Xenium demo; ideal first single-cell niche-graph integration test.",
     ),
+    "gse293199_tnbc_xenium": Dataset(
+        id="gse293199_tnbc_xenium",
+        name="GSE293199 TNBC Xenium (OmiCLIP source)",
+        platform="Xenium",
+        tissue="triple-negative breast cancer",
+        issues=(43,),
+        url_status="verified_direct",
+        page_url="https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE293199",
+        reader="squidpy.read.xenium",
+        citation_key="omiclip2025",
+        raw_count_artifact="Xenium output bundle raw counts, 280-plex (RAW.tar 13.6 GB)",
+        raw_count_policy=RAW_COUNT_POLICY,
+        contract=_XENIUM_CONTRACT,
+        size="280-panel; ~160k cells; 13.6 GB full RAW.tar (subset ~3 GB)",
+        notes="Verified GEO RAW.tar bundle. Start from the ~3 GB subset. "
+        "direct_url is the GEO supplementary RAW.tar resolved from the GSE page.",
+        direct_url="https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE293199&format=file",
+    ),
     # ---- CosMx SMI ------------------------------------------------------
     "cosmx_nsclc_nanostring": Dataset(
         id="cosmx_nsclc_nanostring",

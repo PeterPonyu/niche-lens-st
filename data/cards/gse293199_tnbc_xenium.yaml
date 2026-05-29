@@ -1,0 +1,21 @@
+id: gse293199_tnbc_xenium
+name: GSE293199 TNBC Xenium (OmiCLIP source)
+platform: Xenium
+tissue: triple-negative breast cancer
+issues: [#43]
+url_status: verified_direct
+page_url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE293199"
+direct_url: "https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE293199&format=file"
+reader: squidpy.read.xenium
+citation_key: omiclip2025
+size: 280-panel; ~160k cells; 13.6 GB full RAW.tar (subset ~3 GB)
+raw_count_artifact: Xenium output bundle raw counts, 280-plex (RAW.tar 13.6 GB)
+raw_count_policy: raw integer count matrix + spatial metadata only; no FASTQ / WSI / normalized-only objects
+contract:
+  X: cell_feature_matrix.h5 / .zarr.zip — raw integer cell x gene counts (float32 on load)
+  coords: cells.parquet / cell_boundaries.parquet segmentation centroids (float32)
+  section_id: per-region / per-sample integer codes (multi-region -> distinct sections)
+  edges: build_graph(coords, section_id, k, 'knn') int64; no cross-section edges
+  labels: derived cluster / annotation (optional, for prototype evaluation)
+  transcripts: transcripts.parquet transcript coordinates (QC / sub-cellular)
+notes: Verified GEO RAW.tar bundle. Start from the ~3 GB subset. direct_url is the GEO supplementary RAW.tar resolved from the GSE page.
