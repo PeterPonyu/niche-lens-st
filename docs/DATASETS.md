@@ -238,6 +238,7 @@ python scripts/data/fetch_datasets.py --dataset xenium_breast_janesick   # dry-r
 | Issue | Dataset | Platform | Why it upgrades the corpus | Raw-count artifact + geometry | Access |
 |-------|---------|----------|----------------------------|-------------------------------|--------|
 | #48 | Xenium **Prime 5K** human cancer cohort | Xenium Prime | ~13–16× plex over #37/#38 (5,006-plex pan-tissue panel); skin melanoma (112,551 cells) + breast (699,110 cells) + ovarian/cervical as extra `section_id` samples | `cell_feature_matrix.zarr.zip`/`.h5` raw counts + `cell_boundaries` + `transcripts.zarr.zip` | ✅ open 10x pages, CC BY 4.0 (per-file hotlinks ⚠️ — pull the Xenium Output Bundle from each page) |
+| #49 | CosMx **WTx Colon** (sigmoid adenocarcinoma) | CosMx SMI | ~3× plex over CosMx Brain (#40), ~20× over NSCLC (#39); whole-transcriptome ~18,933-plex at single-cell + sub-cellular resolution | `exprMat_file.csv` raw counts + `metadata_file.csv` centroids + per-cell polygons + `tx_file.csv` | ⚠️ form-gated (registration) at brukerspatialbiology.com — same pattern as #40 |
 
 > These supersede the lower-plex Xenium (#37/#38) and CosMx (#39/#40) members at
 > the **same single-cell, cell-boundary modality**, giving deeper per-cell
@@ -266,5 +267,6 @@ in CI/smoke; ⚠️ flags are preserved until the official bundle URL is resolve
 | #46 | `abc_atlas_zhuang_merfish` | ✅ open AWS S3 (atlas-scale multi-section) |
 | #47 | `vizgen_ffpe_io_merfish` | ⚠️ registration-gated (Data Release Program) |
 | #48 | `xenium_prime_5k_cancer` | ✅ pages verified · hotlinks ⚠️ (upgrades #37/#38) |
+| #49 | `cosmx_wtx_colon` | ⚠️ form-gated (upgrades #39/#40) |
 
 Source papers for every dataset are tracked in [`LITERATURE_LINKS.md`](../LITERATURE_LINKS.md).

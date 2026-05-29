@@ -222,6 +222,23 @@ DATASETS: dict[str, Dataset] = {
         notes="Form-gated (name/email) at brukerspatialbiology.com; no anonymous URL. "
         "Download manually, then point the reader at the extracted directory.",
     ),
+    "cosmx_wtx_colon": Dataset(
+        id="cosmx_wtx_colon",
+        name="CosMx Human Whole Transcriptome (WTx) Colon (sigmoid adenocarcinoma)",
+        platform="CosMx SMI",
+        tissue="sigmoid colon adenocarcinoma (Stage IVA)",
+        issues=(49,),
+        url_status="gated",
+        page_url="https://www.brukerspatialbiology.com/products/cosmx-spatial-molecular-imager/ffpe-dataset/cosmx-human-whole-transcriptome-colon-dataset/",
+        reader="squidpy.read.nanostring",
+        citation_key="cosmx_wtx_18933plex_2024",
+        raw_count_artifact="exprMat_file.csv raw counts, ~18,933-plex (WTx) + polygons + tx",
+        raw_count_policy=RAW_COUNT_POLICY,
+        contract=_COSMX_CONTRACT,
+        size="~18,933-plex; multi-GB (size not printed on gated page)",
+        notes="Upgrades #39/#40: ~3x plex over CosMx Brain, ~20x over NSCLC. Form-gated "
+        "(registration) at brukerspatialbiology.com -- same access pattern as #40.",
+    ),
     # ---- MERFISH / Vizgen ----------------------------------------------
     "merfish_mouse_brain_receptor_map": Dataset(
         id="merfish_mouse_brain_receptor_map",
