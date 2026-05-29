@@ -17,6 +17,7 @@ guessed DOI.
 | #39 | `he2022cosmx` | He et al., "High-plex imaging of RNA and proteins at subcellular resolution in fixed tissue by spatial molecular imaging", *Nature Biotechnology* (2022) — CosMx SMI / Lung9. | https://doi.org/10.1038/s41587-022-01483-z | ⚠️ confirm DOI |
 | #40 | `bruker_cosmx_brain_2024` | Bruker Spatial Biology — CosMx Human Brain (Frontal Cortex, WTx 6,078-plex) FFPE public dataset (form-gated). | https://www.brukerspatialbiology.com/ | ⚠️ data release (gated) |
 | #41 | `vizgen_mouse_brain_receptor_2021` | Vizgen MERFISH Mouse Brain Receptor Map data release (483-plex, 9 slices). | https://info.vizgen.com/mouse-brain-data | ⚠️ data release (no single paper) |
+| #42 | `gse208253_oscc_visium` | GEO Series GSE208253 — HPV-negative OSCC Visium (12 slides). | https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE208253 | ⚠️ confirm associated paper |
 
 ## Notes
 
