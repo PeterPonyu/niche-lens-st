@@ -25,7 +25,11 @@ import os
 import pathlib
 import subprocess
 import sys
-import tomllib
+
+try:
+    import tomllib  # Python >= 3.11
+except ModuleNotFoundError:  # pragma: no cover - Python 3.10 fallback
+    import tomli as tomllib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 

@@ -9,7 +9,6 @@ silently asserting a meaningless biological "everything is shared" result.
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
 from nichelens_st.model import TORCH_AVAILABLE, NicheModelConfig, fit_niche_model
