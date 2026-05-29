@@ -117,6 +117,22 @@ DATASETS: dict[str, Dataset] = {
         notes="Direct .h5 hotlink UNVERIFIED -- resolve Output Bundle from the page. "
         "Superseded at higher plex by Xenium Prime 5K (#48).",
     ),
+    "xenium_breast_janesick": Dataset(
+        id="xenium_breast_janesick",
+        name="Xenium Human Breast Cancer (Janesick)",
+        platform="Xenium",
+        tissue="breast cancer",
+        issues=(38,),
+        url_status="verified_page",
+        page_url="https://www.10xgenomics.com/products/xenium-in-situ/preview-dataset-human-breast",
+        reader="squidpy.read.xenium",
+        citation_key="janesick2023xenium",
+        raw_count_artifact="cell_feature_matrix.h5, 313-plex (280+33), ~110-170k cells",
+        raw_count_policy=RAW_COUNT_POLICY,
+        contract=_XENIUM_CONTRACT,
+        size="313 genes; ~110-170k cells; 0.4-1.5 GB (full outs 8-9 GB)",
+        notes="Canonical Xenium demo; ideal first single-cell niche-graph integration test.",
+    ),
 }
 
 

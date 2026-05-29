@@ -242,5 +242,6 @@ in CI/smoke; ⚠️ flags are preserved until the official bundle URL is resolve
 | Issue | Registry id | Status |
 |-------|-------------|--------|
 | #37 | `xenium_skin_melanoma` | ✅ page verified · hotlink ⚠️ (resolve bundle) |
+| #38 | `xenium_breast_janesick` | ✅ page verified · hotlink ⚠️ (canonical first integration test) |
 
 Source papers for every dataset are tracked in [`LITERATURE_LINKS.md`](../LITERATURE_LINKS.md).
