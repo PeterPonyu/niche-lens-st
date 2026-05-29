@@ -242,6 +242,23 @@ DATASETS: dict[str, Dataset] = {
         notes="Open AWS S3 Public Dataset (CC BY 4.0, no gating) -- the only fully-open "
         "pull of the multi-section set. Resolve S3 object paths via abc_atlas_access docs.",
     ),
+    "vizgen_ffpe_io_merfish": Dataset(
+        id="vizgen_ffpe_io_merfish",
+        name="Vizgen MERFISH FFPE Human Immuno-Oncology (16 samples x 8 tumor types)",
+        platform="MERFISH",
+        tissue="human multi-cancer (colon/liver/melanoma/ovarian/prostate/lung/breast/uterine)",
+        issues=(47,),
+        url_status="gated",
+        page_url="https://vizgen.com/human-ffpe-immunooncology-release-roadmap/",
+        reader="squidpy.read.vizgen",
+        citation_key="vizgen_ffpe_io_2022",
+        raw_count_artifact="cell_by_gene.csv raw counts, 500-plex, ~9M cells + cell_metadata.csv centroids",
+        raw_count_policy=RAW_COUNT_POLICY,
+        contract=_MERFISH_CONTRACT,
+        size="500-plex; ~9M cells; 16 samples x 8 tumor types",
+        notes="Vizgen Data Release Program (registration), like #41. No anonymous hotlink "
+        "-- resolve per-sample URLs from the portal.",
+    ),
     # ---- Visium (spot-resolution robustness only) ----------------------
     "gse208253_oscc_visium": Dataset(
         id="gse208253_oscc_visium",
