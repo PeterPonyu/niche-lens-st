@@ -1,0 +1,21 @@
+id: wang2025_matched_tma
+name: Wang 2025 iST FFPE matched multi-platform TMA (Xenium + MERSCOPE + CosMx)
+platform: Xenium + MERSCOPE + CosMx (matched)
+tissue: "matched TMAs: 17 tumor + 16 normal types"
+issues: [#133]
+url_status: unverified
+page_url: ""
+direct_url: null
+reader: "per-platform: squidpy.read.xenium / read.vizgen / read.nanostring"
+citation_key: wang2025ist
+size: "matched TMAs: 17 tumor + 16 normal types across 3 high-plex platforms + scRNA"
+raw_count_artifact: per-platform raw count matrices + segmentation centroids (matched sections)
+raw_count_policy: raw integer count matrix + spatial metadata only; no FASTQ / WSI / normalized-only objects
+contract:
+  X: cell_feature_matrix.h5 / .zarr.zip — raw integer cell x gene counts (float32 on load)
+  coords: cells.parquet / cell_boundaries.parquet segmentation centroids (float32)
+  section_id: matched TMA core / platform code; loaders must PRESERVE cross-technology section matching so subgraphs stay platform-comparable
+  edges: build_graph(coords, section_id, k, 'knn') int64; no cross-section edges
+  labels: derived cluster / annotation (optional, for prototype evaluation)
+  transcripts: transcripts.parquet transcript coordinates (QC / sub-cellular)
+notes: "Registry #24. Same physical sections on Xenium + MERSCOPE + CosMx -> gold for platform-invariant vs technology-specific niches. URL UNVERIFIED -- resolve the per-platform bundles from the Wang 2025 data-availability statement; never fabricate a hotlink."
