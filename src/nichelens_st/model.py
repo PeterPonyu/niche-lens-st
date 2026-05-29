@@ -93,23 +93,29 @@ class NicheModelResult:
     marker_table: list[list[int]] = field(default_factory=list)
 
 
-def _kmeans(
-    H: np.ndarray, n_clusters: int, n_iters: int, seed: int
-) -> np.ndarray:
-    """Deterministic Lloyd's k-means returning int64 cluster ids in ``[0, k)``.
+def _unit_rows(M: np.ndarray) -> np.ndarray:
+    """Project rows back onto the unit sphere (rows with ~0 norm stay near 0)."""
+    norms = np.linalg.norm(M, axis=1, keepdims=True)
+    return M / np.maximum(norms, 1e-12)
 
-    Uses k-means++ seeding with a fixed ``numpy`` generator so a given seed and
-    embedding matrix always reproduce the same assignment. Cluster ids are
-    relabeled to a contiguous, content-defined order (by first appearance over
-    sorted centroids) so the catalog is stable.
+
+def _spherical_kmeans(
+    Hd: np.ndarray, k: int, n_iters: int, rng: np.random.Generator
+) -> tuple[np.ndarray, np.ndarray]:
+    """Lloyd's k-means specialized for L2-normalized (unit-sphere) embeddings.
+
+    The encoder is trained on a cosine objective and emits unit-norm rows, so
+    cluster assignment must use cosine geometry. Centroids are renormalized onto
+    the unit sphere after every mean update (spherical k-means): on the sphere
+    squared-Euclidean nearest-centroid then agrees with cosine nearest-centroid.
+    Without renormalization the mean of unit vectors has norm < 1 and drifts
+    inside the ball, so Euclidean assignment no longer matches cosine. Returns
+    ``(labels, centers)`` with ``centers`` on the unit sphere.
     """
-    n = H.shape[0]
-    k = min(n_clusters, n)
-    rng = np.random.default_rng(seed)
+    n = Hd.shape[0]
 
-    # k-means++ initialization.
-    centers = np.empty((k, H.shape[1]), dtype=np.float64)
-    Hd = H.astype(np.float64, copy=False)
+    # k-means++ initialization (seeds are sampled unit-norm rows).
+    centers = np.empty((k, Hd.shape[1]), dtype=np.float64)
     first = int(rng.integers(n))
     centers[0] = Hd[first]
     closest_sq = np.sum((Hd - centers[0]) ** 2, axis=1)
@@ -125,7 +131,7 @@ def _kmeans(
 
     labels = np.zeros(n, dtype=np.int64)
     for _ in range(n_iters):
-        # Assign.
+        # Assign (Euclidean nearest == cosine nearest while centers are unit).
         dists = np.sum(
             (Hd[:, None, :] - centers[None, :, :]) ** 2, axis=2
         )
@@ -134,11 +140,32 @@ def _kmeans(
             labels = new_labels
             break
         labels = new_labels
-        # Update.
+        # Update centroids, then renormalize back onto the unit sphere.
         for c in range(k):
             members = Hd[labels == c]
             if members.size:
                 centers[c] = members.mean(axis=0)
+        centers = _unit_rows(centers)
+
+    return labels, centers
+
+
+def _kmeans(
+    H: np.ndarray, n_clusters: int, n_iters: int, seed: int
+) -> np.ndarray:
+    """Deterministic spherical k-means returning int64 cluster ids in ``[0, k)``.
+
+    Uses k-means++ seeding with a fixed ``numpy`` generator so a given seed and
+    embedding matrix always reproduce the same assignment. Cluster ids are
+    relabeled to a contiguous, content-defined order (by first appearance over
+    sorted centroids) so the catalog is stable.
+    """
+    n = H.shape[0]
+    k = min(n_clusters, n)
+    rng = np.random.default_rng(seed)
+    Hd = H.astype(np.float64, copy=False)
+
+    labels, _ = _spherical_kmeans(Hd, k, n_iters, rng)
 
     # Relabel to contiguous ids in order of first appearance for stability.
     _, first_idx = np.unique(labels, return_index=True)
