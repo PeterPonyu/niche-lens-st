@@ -273,6 +273,19 @@ no URL to resolve, real loaders wired in `fetch_datasets.py`.
 
 ---
 
+## Cell-cell communication (derived data — no download)
+
+| Issue | Step | Entry point | Output |
+|-------|------|-------------|--------|
+| #57 | Ligand-receptor inference (OmniPath, a CellPhoneDB superset) | `squidpy.gr.ligrec(adata, cluster_key=…)` — wrapped by `fetch_datasets.run_ligrec(adata, cluster_key, n_perms=…, threshold=…, seed=…)` | `res['means']` + `res['pvalues']` → `interaction_summary` (per-niche L-R enrichment), paired with encoder `prototype_id` (see `docs/MVP_DESIGN.md`). |
+
+> **No raw download / no `data/cards/` entry.** OmniPath resolves and caches its
+> ligand-receptor reference at call time. This is a **derived-data step** that runs
+> on any loaded dataset (Tier B anchors or imaging) that carries a cell-type label
+> column; it consumes the niche pipeline's output, it does not add a fetch source.
+
+---
+
 ## Consolidated ingestion roadmap (per issue)
 
 Every dataset is registered in `scripts/data/registry.py` with a `data/cards/<id>.yaml`
@@ -295,6 +308,7 @@ in CI/smoke; ⚠️ flags are preserved until the official bundle URL is resolve
 | #49 | `cosmx_wtx_colon` | ⚠️ form-gated (upgrades #39/#40) |
 | #55 | `merfish_hypothalamus_moffitt` | ✅ squidpy builtin (real loader) |
 | #56 | `seqfish_mouse_embryo_lohoff` | ✅ squidpy builtin (real loader) |
+| #57 | `ligrec_omnipath` | derived-data step (no download) |
 | #133 | `wang2025_matched_tma` | ⚠️ UNVERIFIED (resolve from data-availability statement) |
 
 Source papers for every dataset are tracked in [`LITERATURE_LINKS.md`](../LITERATURE_LINKS.md).
