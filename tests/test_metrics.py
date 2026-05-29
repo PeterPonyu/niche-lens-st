@@ -8,11 +8,38 @@ fixed contract without requiring torch (encoder is gated).
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
-from nichelens_st.metrics import score_against_truth
+from nichelens_st.metrics import (
+    adjusted_rand,
+    marker_recall_at_k,
+    score_against_truth,
+    section_overlap_rate,
+)
 from nichelens_st.model import NicheModelResult, _compute_marker_table
 from nichelens_st.synth import generate_instance
+
+
+def _assert_nan(x: float) -> None:
+    assert math.isnan(x), f"expected NaN, got {x!r}"
+
+
+def test_empty_input_not_perfect():
+    """Issue #83: empty/degenerate inputs must NOT score 1.0 across metrics."""
+    # adjusted_rand: empty and single-cell inputs are undefined.
+    _assert_nan(adjusted_rand(np.array([], dtype=np.int64), np.array([], dtype=np.int64)))
+    _assert_nan(adjusted_rand(np.array([0], dtype=np.int64), np.array([0], dtype=np.int64)))
+
+    # marker_recall_at_k: empty catalog is undefined.
+    _assert_nan(marker_recall_at_k([], [], k=5))
+    # marker_recall_at_k: empty per-prototype truth must not be a free point.
+    _assert_nan(marker_recall_at_k([[1, 2]], [[]], k=5))
+
+    # section_overlap_rate: empty catalog is undefined.
+    z3 = np.zeros(3, dtype=np.int64)
+    _assert_nan(section_overlap_rate(z3, z3, []))
 
 
 def test_compute_marker_table_ranks_by_mean_expression():

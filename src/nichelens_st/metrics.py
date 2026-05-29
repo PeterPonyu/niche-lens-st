@@ -9,14 +9,19 @@ from scipy.optimize import linear_sum_assignment
 
 
 def adjusted_rand(pred_id: np.ndarray, true_id: np.ndarray) -> float:
-    """Adjusted Rand Index, invariant to label permutations."""
+    """Adjusted Rand Index, invariant to label permutations.
+
+    Returns ``NaN`` when the score is undefined (empty input, single cell, or
+    both partitions degenerate to one cluster) — issue #83. Previously these
+    cases returned ``1.0`` ("perfect"), silently masking collapsed outputs.
+    """
     pred = np.asarray(pred_id)
     true = np.asarray(true_id)
     if pred.shape != true.shape:
         raise ValueError(f"pred_id and true_id shapes differ: {pred.shape} != {true.shape}")
     n = pred.size
     if n < 2:
-        return 1.0
+        return float("nan")
     pred_labels, pred_inv = np.unique(pred, return_inverse=True)
     true_labels, true_inv = np.unique(true, return_inverse=True)
     contingency = np.zeros((pred_labels.size, true_labels.size), dtype=np.int64)
@@ -29,8 +34,108 @@ def adjusted_rand(pred_id: np.ndarray, true_id: np.ndarray) -> float:
     max_index = 0.5 * (row_comb + col_comb)
     denom = max_index - expected
     if denom == 0:
-        return 1.0
+        # Both partitions collapse to one cluster — ARI is undefined.
+        return float("nan")
     return float((sum_comb - expected) / denom)
+
+
+def _contingency(pred_id: np.ndarray, true_id: np.ndarray) -> tuple[np.ndarray, int]:
+    """Joint count matrix between predicted clusters (rows) and true classes (cols)."""
+    pred = np.asarray(pred_id)
+    true = np.asarray(true_id)
+    if pred.shape != true.shape:
+        raise ValueError(f"pred_id and true_id shapes differ: {pred.shape} != {true.shape}")
+    n = pred.size
+    _, pred_inv = np.unique(pred, return_inverse=True)
+    _, true_inv = np.unique(true, return_inverse=True)
+    table = np.zeros(
+        (int(pred_inv.max(initial=-1)) + 1, int(true_inv.max(initial=-1)) + 1),
+        dtype=np.int64,
+    )
+    if n:
+        np.add.at(table, (pred_inv, true_inv), 1)
+    return table, n
+
+
+def _entropy(counts: np.ndarray, n: int) -> float:
+    """Shannon entropy (nats) of a count vector; 0.0 for an empty/degenerate set."""
+    counts = counts[counts > 0]
+    if counts.size <= 1 or n == 0:
+        return 0.0
+    p = counts / n
+    return float(-np.sum(p * np.log(p)))
+
+
+def _conditional_entropy(table: np.ndarray, n: int, *, given_rows: bool) -> float:
+    """Conditional entropy (nats); ``given_rows`` conditions on the row marginal.
+
+    ``given_rows=True`` -> ``H(true | pred)`` (column uncertainty given a cluster).
+    Computed directly (not as ``H - I``) so it is exactly 0.0 when each
+    conditioning group is pure, avoiding the float-rounding noise of subtraction.
+    """
+    if n == 0:
+        return 0.0
+    rows, cols = np.nonzero(table > 0)
+    nij = table[rows, cols].astype(np.float64)
+    marginal = (table.sum(axis=1)[rows] if given_rows else table.sum(axis=0)[cols]).astype(
+        np.float64
+    )
+    return float(-np.sum((nij / n) * (np.log(nij) - np.log(marginal))))
+
+
+def homogeneity(pred_id: np.ndarray, true_id: np.ndarray) -> float:
+    """Each cluster contains members of a single class (1.0 = fully homogeneous).
+
+    ``homogeneity = 1 - H(true | pred) / H(true)``; defined as 1.0 when the truth
+    has no entropy (a single class). Label-permutation invariant like ARI.
+    """
+    table, n = _contingency(pred_id, true_id)
+    h_true = _entropy(table.sum(axis=0), n)
+    if h_true == 0.0:
+        return 1.0
+    cond = _conditional_entropy(table, n, given_rows=True)
+    return float(min(1.0, max(0.0, 1.0 - cond / h_true)))
+
+
+def completeness(pred_id: np.ndarray, true_id: np.ndarray) -> float:
+    """All members of a class are assigned to the same cluster (1.0 = complete).
+
+    ``completeness = 1 - H(pred | true) / H(pred)``; defined as 1.0 when the
+    prediction has no entropy (a single cluster). Counterpart of homogeneity.
+    """
+    table, n = _contingency(pred_id, true_id)
+    h_pred = _entropy(table.sum(axis=1), n)
+    if h_pred == 0.0:
+        return 1.0
+    cond = _conditional_entropy(table, n, given_rows=False)
+    return float(min(1.0, max(0.0, 1.0 - cond / h_pred)))
+
+
+def v_measure(pred_id: np.ndarray, true_id: np.ndarray) -> float:
+    """Harmonic mean of homogeneity and completeness (equals arithmetic-mean NMI)."""
+    h = homogeneity(pred_id, true_id)
+    c = completeness(pred_id, true_id)
+    if h + c == 0.0:
+        return 0.0
+    return float(2 * h * c / (h + c))
+
+
+def normalized_mutual_info(pred_id: np.ndarray, true_id: np.ndarray) -> float:
+    """NMI with arithmetic-mean normalisation: ``I / ((H(pred)+H(true))/2)``.
+
+    1.0 for identical partitions (up to label permutation), ~0 for independent
+    ones. Equals the V-measure; reported alongside ARI so a cluster-count
+    mismatch can be diagnosed as over- vs under-segmentation.
+    """
+    table, n = _contingency(pred_id, true_id)
+    h_pred = _entropy(table.sum(axis=1), n)
+    h_true = _entropy(table.sum(axis=0), n)
+    denom = 0.5 * (h_pred + h_true)
+    if denom == 0.0:
+        return 0.0
+    # I(true; pred) = H(true) - H(true | pred); direct conditional form is exact.
+    mi = h_true - _conditional_entropy(table, n, given_rows=True)
+    return float(min(1.0, max(0.0, mi / denom)))
 
 
 def morans_i(values: np.ndarray, edges: np.ndarray) -> float:
@@ -67,11 +172,18 @@ def section_overlap_rate(
     section = np.asarray(section_id)
     if proto.shape != section.shape:
         raise ValueError(f"prototype_id and section_id shapes differ: {proto.shape} != {section.shape}")
+    # Empty catalog → undefined, not a free "perfect" score (issue #83).
     if len(proto_kind) == 0:
-        return 1.0
+        return float("nan")
     sections = set(section.tolist())
+    # "unknown" tags are emitted when the conserved/sample_specific
+    # distinction is undefined (single-section input, issue #85); they
+    # contribute neither to the numerator nor the denominator.
+    scorable = [(p, k) for p, k in enumerate(proto_kind) if k != "unknown"]
+    if not scorable:
+        return float("nan")
     correct = 0
-    for p, kind in enumerate(proto_kind):
+    for p, kind in scorable:
         seen = set(section[proto == p].tolist())
         if kind == "conserved":
             correct += seen == sections
@@ -79,7 +191,7 @@ def section_overlap_rate(
             correct += len(seen) < len(sections)
         else:
             raise ValueError(f"invalid proto_kind at {p}: {kind!r}")
-    return float(correct / len(proto_kind))
+    return float(correct / len(scorable))
 
 
 def marker_recall_at_k(
@@ -97,8 +209,9 @@ def marker_recall_at_k(
         raise ValueError(f"k must be >= 1; got {k}")
     if len(pred_markers) != len(true_markers):
         raise ValueError("pred_markers and true_markers must have the same length")
+    # Empty catalog → undefined, not a free "perfect" score (issue #83).
     if not true_markers:
-        return 1.0
+        return float("nan")
     recalls = []
     for pred, true in zip(pred_markers, true_markers, strict=True):
         if true and len(true) < k:
@@ -110,10 +223,14 @@ def marker_recall_at_k(
             )
         true_top = list(true[:k])
         if not true_top:
-            recalls.append(1.0)
+            # Per-prototype truth is empty: recall is undefined for that row.
+            # Skip it so a catalog with no true markers anywhere yields NaN
+            # rather than the previous silent 1.0 (issue #83).
             continue
         pred_top = set(pred[:k])
         recalls.append(len(pred_top.intersection(true_top)) / len(true_top))
+    if not recalls:
+        return float("nan")
     return float(np.mean(recalls))
 
 
@@ -157,6 +274,10 @@ def score_against_truth(
             aligned_pred_markers.append(pred_marker_table[p])
     return {
         "ARI": adjusted_rand(pred_id, true_id),
+        "NMI": normalized_mutual_info(pred_id, true_id),
+        "homogeneity": homogeneity(pred_id, true_id),
+        "completeness": completeness(pred_id, true_id),
+        "v_measure": v_measure(pred_id, true_id),
         "MoranI": morans_i(pred_id, edges),
         "section_overlap_rate": section_overlap_rate(
             pred_id, section_id, pred_proto_kind

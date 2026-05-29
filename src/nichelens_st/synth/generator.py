@@ -5,6 +5,7 @@ Schema mirrors ``docs/SYNTHETIC_BENCHMARK.md``.
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
@@ -60,6 +61,21 @@ def generate_instance(
         raise ValueError(f"k_nn must be non-negative; got {k_nn}")
     if n_markers < 1:
         raise ValueError(f"n_markers must be >= 1; got {n_markers}")
+
+    # Section ``s`` assigns the sample-specific prototype
+    # ``K_conserved + (s % J_specific)``, so the indices
+    # ``K_conserved + n_sections .. K_conserved + J_specific - 1`` would never
+    # be assigned to any cell and would appear as phantom catalog entries
+    # (issue #72). Clip ``J_specific`` to the number of sections so the
+    # catalog matches the realised assignments.
+    if J_specific > n_sections:
+        warnings.warn(
+            f"J_specific={J_specific} > n_sections={n_sections}; clipping to "
+            f"{n_sections} so every sample_specific prototype is realised "
+            "(issue #72)",
+            stacklevel=2,
+        )
+        J_specific = n_sections
 
     rng = np.random.default_rng(seed)
     n_cells = n_sections * n_cells_per_section
