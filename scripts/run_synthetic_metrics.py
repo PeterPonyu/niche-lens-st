@@ -27,6 +27,10 @@ def main() -> None:
         k=5,
     )
     print(f"ARI(model, truth):               {score['ARI']:.3f}")
+    print(f"NMI(model, truth):               {score['NMI']:.3f}")
+    print(f"homogeneity(model, truth):       {score['homogeneity']:.3f}")
+    print(f"completeness(model, truth):      {score['completeness']:.3f}")
+    print(f"v_measure(model, truth):         {score['v_measure']:.3f}")
     print(f"MoranI(model):                   {score['MoranI']:.3f}")
     print(f"section_overlap_rate(model):     {score['section_overlap_rate']:.3f}")
     print(f"marker_recall@5(model vs truth): {score['marker_recall_at_k']:.3f}")
