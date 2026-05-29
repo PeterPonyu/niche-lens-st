@@ -249,5 +249,6 @@ in CI/smoke; ⚠️ flags are preserved until the official bundle URL is resolve
 | #42 | `gse208253_oscc_visium` | ✅ GEO RAW.tar (spot-resolution robustness only) |
 | #43 | `gse293199_tnbc_xenium` | ✅ GEO RAW.tar (start from ~3 GB subset) |
 | #45 | `xenium_lymph_node` | ✅ page verified · hotlink ⚠️ (immune/lymphoid axis) |
+| #46 | `abc_atlas_zhuang_merfish` | ✅ open AWS S3 (atlas-scale multi-section) |
 
 Source papers for every dataset are tracked in [`LITERATURE_LINKS.md`](../LITERATURE_LINKS.md).
