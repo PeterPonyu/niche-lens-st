@@ -19,6 +19,7 @@ guessed DOI.
 | #41 | `vizgen_mouse_brain_receptor_2021` | Vizgen MERFISH Mouse Brain Receptor Map data release (483-plex, 9 slices). | https://info.vizgen.com/mouse-brain-data | ⚠️ data release (no single paper) |
 | #42 | `gse208253_oscc_visium` | GEO Series GSE208253 — HPV-negative OSCC Visium (12 slides). | https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE208253 | ⚠️ confirm associated paper |
 | #43 | `omiclip2025` | GEO Series GSE293199 — TNBC Xenium (OmiCLIP source). | https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE293199 | ⚠️ confirm OmiCLIP paper DOI |
+| #45 | `tenx_xenium_lymph_node_2023` | 10x Genomics — Human Lymph Node preview, Xenium Human Multi-Tissue & Cancer panel (CC BY 4.0). | https://www.10xgenomics.com/datasets/human-lymph-node-preview-data-xenium-human-multi-tissue-and-cancer-panel-1-standard | ⚠️ data release (no single paper) |
 
 ## Notes
 
