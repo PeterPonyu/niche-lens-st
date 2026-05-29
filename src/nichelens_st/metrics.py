@@ -197,7 +197,14 @@ def section_overlap_rate(
 def marker_recall_at_k(
     pred_markers: list[list[int]], true_markers: list[list[int]], k: int = 5
 ) -> float:
-    """Mean marker recall@k over prototypes."""
+    """Mean marker recall@k over prototypes.
+
+    Raises ``ValueError`` if ``k`` exceeds the number of available ground-truth
+    markers for any (non-empty) prototype. Otherwise recall@k would silently
+    degrade to recall@len(true) -- a result labeled recall@k but measured at a
+    smaller depth. Generate the ground truth with at least ``k`` markers per
+    prototype (``generate_instance(n_markers=...)``).
+    """
     if k < 1:
         raise ValueError(f"k must be >= 1; got {k}")
     if len(pred_markers) != len(true_markers):
@@ -207,6 +214,13 @@ def marker_recall_at_k(
         return float("nan")
     recalls = []
     for pred, true in zip(pred_markers, true_markers, strict=True):
+        if true and len(true) < k:
+            raise ValueError(
+                f"k={k} exceeds available true markers ({len(true)}) for a "
+                "prototype; recall@k would silently degrade to "
+                f"recall@{len(true)}. Provide at least k markers per prototype "
+                "(see generate_instance(n_markers=...))."
+            )
         true_top = list(true[:k])
         if not true_top:
             # Per-prototype truth is empty: recall is undefined for that row.
