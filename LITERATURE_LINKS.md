@@ -26,6 +26,7 @@ guessed DOI.
 | #49 | `cosmx_wtx_18933plex_2024` | "Sub-cellular Imaging of the Entire Protein-Coding Human Transcriptome (18933-plex) … using Spatial Molecular Imaging", *bioRxiv* 2024.11.27.625536. | https://doi.org/10.1101/2024.11.27.625536 | ✅ preprint ID from issue #49 |
 | #55 | `moffitt2018merfish` | Moffitt et al., "Molecular, spatial, and functional single-cell profiling of the hypothalamic preoptic region", *Science* (2018). Raw counts: Dryad `doi:10.5061/dryad.8t8s248` (CC0). | https://doi.org/10.1126/science.aau5324 · https://doi.org/10.5061/dryad.8t8s248 | ⚠️ confirm Science DOI; ✅ Dryad DOI from issue #55 |
 | #56 | `lohoff2022seqfish` | Lohoff et al., "Integration of spatial and single-cell transcriptomic data elucidates mouse organogenesis", *Nature Biotechnology* (2022). | https://doi.org/10.1038/s41587-021-01006-2 | ⚠️ confirm DOI |
+| #57 | `turei2021omnipath` | Türei et al., "Integrated intra- and intercellular signaling knowledge for multicellular omics analysis", *Molecular Systems Biology* (2021) — OmniPath backend for `squidpy.gr.ligrec`. | https://doi.org/10.15252/msb.20209923 | ⚠️ confirm DOI |
 | #133 | `wang2025ist` | Wang 2025 — matched multi-platform iST FFPE TMA (Xenium + MERSCOPE + CosMx + scRNA). | (resolve from the data-availability statement) | ⚠️ UNVERIFIED — do not cite until confirmed |
 
 ## Notes

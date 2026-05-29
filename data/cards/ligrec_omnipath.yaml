@@ -1,0 +1,19 @@
+id: ligrec_omnipath
+name: Cell-cell communication via squidpy.gr.ligrec (OmniPath)
+platform: derived (any loaded AnnData with a cell-type label)
+tissue: n/a (runs on any ingested dataset)
+issues: [#57]
+url_status: derived
+page_url: "https://omnipathdb.org/"
+direct_url: null
+reader: squidpy.gr.ligrec
+citation_key: turei2021omnipath
+size: n/a (no download)
+raw_count_artifact: n/a -- derived from an already-loaded AnnData
+raw_count_policy: no raw download; OmniPath ligand-receptor reference resolved/cached at call time
+contract:
+  input: any AnnData in the pipeline (post-graph-build, post-encoder) with a cell-type obs column
+  output: res['means'] + res['pvalues'] -> interaction_summary (per-niche L-R enrichment)
+  section_id: n/a
+  edges: n/a
+notes: "Derived-data step: pair res with prototype_id from the encoder to build the interaction_summary output (docs/MVP_DESIGN.md). No data/cards download path."
