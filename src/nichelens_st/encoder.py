@@ -87,6 +87,17 @@ def _undirected_edge_index(edges: np.ndarray) -> "Tensor":
 
 if TORCH_AVAILABLE:
 
+    def _l2_normalize(h: "Tensor") -> "Tensor":
+        """L2-normalize rows onto the unit sphere with a float32-safe ``eps``.
+
+        torch's default ``eps=1e-12`` is far below the smallest meaningful
+        float32 norm. For a near-zero-norm row (e.g. an isolated node with
+        zero/dropped features), dividing by a tiny norm amplifies it into a
+        noise-dominated unit vector that then dominates the InfoNCE similarity
+        matrix. ``eps=1e-6`` keeps such degenerate rows bounded.
+        """
+        return torch.nn.functional.normalize(h, dim=1, eps=1e-6)
+
     class _MeanAggLayer(nn.Module):
         """One GraphSAGE-mean message-passing layer using scatter add."""
 
@@ -135,7 +146,7 @@ if TORCH_AVAILABLE:
                 h = layer(h, edge_index, n_nodes)
                 if i < len(self.layers) - 1:
                     h = self.act(h)
-            return torch.nn.functional.normalize(h, dim=1)
+            return _l2_normalize(h)
 
 
 def _augment(
