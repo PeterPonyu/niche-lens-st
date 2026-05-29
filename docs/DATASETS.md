@@ -243,5 +243,6 @@ in CI/smoke; ⚠️ flags are preserved until the official bundle URL is resolve
 |-------|-------------|--------|
 | #37 | `xenium_skin_melanoma` | ✅ page verified · hotlink ⚠️ (resolve bundle) |
 | #38 | `xenium_breast_janesick` | ✅ page verified · hotlink ⚠️ (canonical first integration test) |
+| #39 | `cosmx_nsclc_nanostring` | ✅ Lung9_Rep1 public; resolve flat-file bundle from page |
 
 Source papers for every dataset are tracked in [`LITERATURE_LINKS.md`](../LITERATURE_LINKS.md).
