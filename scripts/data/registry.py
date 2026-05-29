@@ -221,6 +221,27 @@ DATASETS: dict[str, Dataset] = {
         notes="Guessed hubfs hotlink UNVERIFIED -- obtain the bundle link from "
         "info.vizgen.com/mouse-brain-data. 9 aligned slices -> strong multi-section signal.",
     ),
+    "abc_atlas_zhuang_merfish": Dataset(
+        id="abc_atlas_zhuang_merfish",
+        name="Allen ABC Atlas - Zhuang MERFISH whole mouse brain",
+        platform="MERFISH",
+        tissue="whole mouse brain (atlas-scale, many sections)",
+        issues=(46,),
+        url_status="verified_page",
+        page_url="https://alleninstitute.github.io/abc_atlas_access/descriptions/Zhuang-ABCA-1.html",
+        reader="anndata.read_h5ad (ABC Atlas AWS S3 public bucket)",
+        citation_key="zhang2023abcatlas",
+        raw_count_artifact=".h5ad raw cell-by-gene counts + metadata (x,y centroids, z, brain_section_label, CCF)",
+        raw_count_policy=RAW_COUNT_POLICY,
+        contract={
+            **_MERFISH_CONTRACT,
+            "section_id": "obs['brain_section_label'] -> integer codes (100s of serial sections)",
+            "coords": "metadata x,y centroids (+ z) and CCF coordinates (float32)",
+        },
+        size="e.g. Zhuang-ABCA-1: 1122-plex, 4.2M cells, 147 sections",
+        notes="Open AWS S3 Public Dataset (CC BY 4.0, no gating) -- the only fully-open "
+        "pull of the multi-section set. Resolve S3 object paths via abc_atlas_access docs.",
+    ),
     # ---- Visium (spot-resolution robustness only) ----------------------
     "gse208253_oscc_visium": Dataset(
         id="gse208253_oscc_visium",
