@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
 from typing import Iterable
 
 import numpy as np
@@ -79,14 +78,6 @@ def build_graph(
     if not src_chunks:
         return np.zeros((2, 0), dtype=np.int64)
     return np.stack([np.concatenate(src_chunks), np.concatenate(dst_chunks)]).astype(np.int64)
-
-
-@dataclass(frozen=True)
-class Subgraph:
-    """A cell-centered induced subgraph using original node identifiers."""
-
-    node_ids: np.ndarray
-    edges: np.ndarray
 
 
 def _adjacency(edges: np.ndarray) -> dict[int, set[int]]:
