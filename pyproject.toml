@@ -13,7 +13,9 @@ authors = [{ name = "PeterPonyu", email = "fuzeyu09@gmail.com" }]
 dependencies = ["numpy>=1.26,<3", "scipy>=1.11,<2"]
 
 [project.optional-dependencies]
-test = ["pytest>=8,<9"]
+# `tomllib` is stdlib only on Python >= 3.11; the packaging-contract tests
+# read pyproject.toml, so pull in `tomli` as a backport on 3.10.
+test = ["pytest>=8,<9", "tomli>=2,<3; python_version < '3.11'"]
 # Optional deep-learning extra for the contrastive niche encoder
 # (nichelens_st.model / nichelens_st.encoder). The base package stays
 # dependency-light (numpy/scipy) and imports without torch; the encoder import
