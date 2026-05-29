@@ -12,6 +12,7 @@ guessed DOI.
 
 | Issue | citation_key | Source paper / data release | Link | Flag |
 |-------|--------------|-----------------------------|------|------|
+| #37 | `tenx_xenium_skin_2023` | 10x Genomics — Xenium Human Multi-Tissue & Cancer panel, Skin/Melanoma public dataset (CC BY 4.0). Cited in the STORM data-availability statement. | https://www.10xgenomics.com/datasets/human-skin-data-xenium-human-multi-tissue-and-cancer-panel | ⚠️ data release (no single paper) |
 
 ## Notes
 

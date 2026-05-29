@@ -99,6 +99,24 @@ RAW_COUNT_POLICY = (
 
 
 DATASETS: dict[str, Dataset] = {
+    # ---- Xenium ---------------------------------------------------------
+    "xenium_skin_melanoma": Dataset(
+        id="xenium_skin_melanoma",
+        name="Xenium Human Skin / Dermal Melanoma (Multi-Tissue & Cancer panel)",
+        platform="Xenium",
+        tissue="skin / dermal melanoma",
+        issues=(37,),
+        url_status="verified_page",
+        page_url="https://www.10xgenomics.com/datasets/human-skin-data-xenium-human-multi-tissue-and-cancer-panel",
+        reader="squidpy.read.xenium",
+        citation_key="tenx_xenium_skin_2023",
+        raw_count_artifact="cell_feature_matrix.h5 (+ MEX), 377-plex, ~68k+90k cells",
+        raw_count_policy=RAW_COUNT_POLICY,
+        contract=_XENIUM_CONTRACT,
+        size="377 genes; 150k-250k cells; 0.5-3 GB",
+        notes="Direct .h5 hotlink UNVERIFIED -- resolve Output Bundle from the page. "
+        "Superseded at higher plex by Xenium Prime 5K (#48).",
+    ),
 }
 
 
