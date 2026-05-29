@@ -168,6 +168,24 @@ DATASETS: dict[str, Dataset] = {
         notes="Form-gated (name/email) at brukerspatialbiology.com; no anonymous URL. "
         "Download manually, then point the reader at the extracted directory.",
     ),
+    # ---- MERFISH / Vizgen ----------------------------------------------
+    "merfish_mouse_brain_receptor_map": Dataset(
+        id="merfish_mouse_brain_receptor_map",
+        name="MERFISH Mouse Brain Receptor Map (9-slice)",
+        platform="MERFISH",
+        tissue="mouse brain",
+        issues=(41,),
+        url_status="unverified",
+        page_url="https://info.vizgen.com/mouse-brain-data",
+        reader="squidpy.read.vizgen",
+        citation_key="vizgen_mouse_brain_receptor_2021",
+        raw_count_artifact="..._cell_by_gene_S#R#.csv raw counts, 483-plex, 734,696 cells",
+        raw_count_policy=RAW_COUNT_POLICY,
+        contract=_MERFISH_CONTRACT,
+        size="483 genes; 734,696 cells; 9 slices (3 coronal x 3 rep); 3-7 GB",
+        notes="Guessed hubfs hotlink UNVERIFIED -- obtain the bundle link from "
+        "info.vizgen.com/mouse-brain-data. 9 aligned slices -> strong multi-section signal.",
+    ),
 }
 
 
