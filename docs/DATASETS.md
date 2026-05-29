@@ -189,3 +189,57 @@ boundaries) · ❌ not a raw count matrix (none found — no replacements requir
 > (and, except the MERFISH centroid-only cases, segmentation polygons + transcript
 > coordinates) before filing. Ingestion follows the same contract above; no new
 > abstractions. Large/registration-gated pulls stay opt-in and never run in CI.
+
+---
+
+## Dataset fetch framework (registry + cards)
+
+The roadmap above is now backed by a concrete, **dependency-light** framework
+(framework + registry depth — *not* full runnable loaders, *not* docs-only):
+
+- **`scripts/data/registry.py`** — the canonical, machine-readable registry.
+  One `Dataset` entry per dataset records `id`, `platform`, `issues`, the
+  link-verification `url_status` (`verified_direct` / `verified_page` /
+  `squidpy_builtin` / `gated` / `unverified` / `derived`), `page_url`,
+  `direct_url` (only when an anonymous artifact URL is confirmed), the squidpy
+  `reader`, a `citation_key`, the raw-count artifact + policy, and the full
+  **contract mapping** (`X` / `coords` / `section_id` / `edges` / `transcripts`).
+- **`scripts/data/fetch_datasets.py`** — the unified CLI that dispatches a
+  per-dataset fetch from the registry. It **never fabricates URLs and never
+  writes placeholder bytes**:
+  - `verified_direct` → real `urllib` download (opt-in `--download`),
+  - `squidpy_builtin` → real `squidpy.datasets.<name>()` load (#55, #56),
+  - `verified_page` / `gated` / `unverified` → a **guarded stub** that prints
+    `URL UNVERIFIED — see issue #N` (or the gated/manual-download instruction)
+    and exits non-zero, pointing at the canonical page to resolve the bundle.
+  - `--list`, `--card <id>`, `--emit-cards`, `--ligrec`, and the default
+    `--dry-run` are **fully offline** (no network, no squidpy import).
+- **`data/cards/<id>.yaml`** — a tracked card per dataset, generated from the
+  registry via `python scripts/data/fetch_datasets.py --emit-cards`. The raw/
+  processed caches (`data/raw/`, `data/processed/`) stay gitignored; only
+  `data/cards/` is tracked.
+- **`build_contract(adata, section_key, k)`** (in `fetch_datasets.py`) maps a
+  loaded AnnData onto `(X, coords, section_id, edges)` by delegating to the
+  repo's existing `nichelens_st.graph.build_graph` — no new abstraction — and
+  asserts no edge bridges a section/FOV boundary.
+
+Offline smoke (exit 0, no network):
+
+```bash
+python scripts/data/fetch_datasets.py --list
+python scripts/data/fetch_datasets.py --card cosmx_nsclc_nanostring
+python scripts/data/fetch_datasets.py --dataset xenium_breast_janesick   # dry-run plan
+```
+
+---
+
+## Consolidated ingestion roadmap (per issue)
+
+Every dataset is registered in `scripts/data/registry.py` with a `data/cards/<id>.yaml`
+card and a row above. Loaders/downloads stay opt-in (`--download`) and never run
+in CI/smoke; ⚠️ flags are preserved until the official bundle URL is resolved.
+
+| Issue | Registry id | Status |
+|-------|-------------|--------|
+
+Source papers for every dataset are tracked in [`LITERATURE_LINKS.md`](../LITERATURE_LINKS.md).
