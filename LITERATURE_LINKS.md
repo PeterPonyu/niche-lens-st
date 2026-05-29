@@ -24,6 +24,7 @@ guessed DOI.
 | #47 | `vizgen_ffpe_io_2022` | Vizgen MERFISH FFPE Human Immuno-Oncology Data Release (16 samples × 8 tumor types, 500-plex). | https://vizgen.com/human-ffpe-immunooncology-release-roadmap/ | ⚠️ data release (registration) |
 | #48 | `tenx_xenium_prime_5k_2024` | 10x Genomics — Xenium Prime 5K Human Pan Tissue & Pathways panel public datasets (2024, CC BY 4.0). | https://www.10xgenomics.com/datasets/xenium-prime-ffpe-human-skin | ⚠️ data release (no single paper) |
 | #49 | `cosmx_wtx_18933plex_2024` | "Sub-cellular Imaging of the Entire Protein-Coding Human Transcriptome (18933-plex) … using Spatial Molecular Imaging", *bioRxiv* 2024.11.27.625536. | https://doi.org/10.1101/2024.11.27.625536 | ✅ preprint ID from issue #49 |
+| #55 | `moffitt2018merfish` | Moffitt et al., "Molecular, spatial, and functional single-cell profiling of the hypothalamic preoptic region", *Science* (2018). Raw counts: Dryad `doi:10.5061/dryad.8t8s248` (CC0). | https://doi.org/10.1126/science.aau5324 · https://doi.org/10.5061/dryad.8t8s248 | ⚠️ confirm Science DOI; ✅ Dryad DOI from issue #55 |
 
 ## Notes
 

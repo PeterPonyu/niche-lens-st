@@ -248,6 +248,22 @@ python scripts/data/fetch_datasets.py --dataset xenium_breast_janesick   # dry-r
 
 ---
 
+## Single-cell squidpy anchors (Tier B, builtin loaders)
+
+These two load **anonymously and reproducibly** via squidpy builtins (figshare
+mirrors) and are the project's primary single-cell niche-graph smoke anchors —
+no URL to resolve, real loaders wired in `fetch_datasets.py`.
+
+| Issue | Dataset | Platform | Loader | Size | Section key / labels |
+|-------|---------|----------|--------|------|----------------------|
+| #55 | MERFISH Mouse Hypothalamus Preoptic (Moffitt 2018) | MERFISH | `squidpy.datasets.merfish()` (figshare 28169379) | 73,655 × 161 | `Bregma` → 8 sections; `obs['Cell_class']`; 3D `obsm['spatial3d']`. Raw counts via Dryad `doi:10.5061/dryad.8t8s248` (CC0) for DL. |
+
+> The squidpy mirrors ship **normalized** matrices — fine for graph/encoder smoke
+> tests, but DL training pulls the **raw** counts from the cited Dryad / source
+> per the project raw-count policy.
+
+---
+
 ## Consolidated ingestion roadmap (per issue)
 
 Every dataset is registered in `scripts/data/registry.py` with a `data/cards/<id>.yaml`
@@ -268,5 +284,6 @@ in CI/smoke; ⚠️ flags are preserved until the official bundle URL is resolve
 | #47 | `vizgen_ffpe_io_merfish` | ⚠️ registration-gated (Data Release Program) |
 | #48 | `xenium_prime_5k_cancer` | ✅ pages verified · hotlinks ⚠️ (upgrades #37/#38) |
 | #49 | `cosmx_wtx_colon` | ⚠️ form-gated (upgrades #39/#40) |
+| #55 | `merfish_hypothalamus_moffitt` | ✅ squidpy builtin (real loader) |
 
 Source papers for every dataset are tracked in [`LITERATURE_LINKS.md`](../LITERATURE_LINKS.md).

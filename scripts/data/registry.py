@@ -295,6 +295,28 @@ DATASETS: dict[str, Dataset] = {
         notes="Vizgen Data Release Program (registration), like #41. No anonymous hotlink "
         "-- resolve per-sample URLs from the portal.",
     ),
+    "merfish_hypothalamus_moffitt": Dataset(
+        id="merfish_hypothalamus_moffitt",
+        name="MERFISH Mouse Hypothalamus Preoptic Region (Moffitt 2018)",
+        platform="MERFISH",
+        tissue="mouse hypothalamus preoptic region",
+        issues=(55,),
+        url_status="squidpy_builtin",
+        page_url="https://doi.org/10.5061/dryad.8t8s248",
+        reader="squidpy.datasets.merfish",
+        citation_key="moffitt2018merfish",
+        raw_count_artifact="squidpy anchor normalized; raw counts via Dryad CC0 (doi:10.5061/dryad.8t8s248)",
+        raw_count_policy="squidpy mirror is normalized; use Dryad raw counts (CC0) for DL training",
+        contract={
+            **_MERFISH_CONTRACT,
+            "section_id": "factorize(obs['Bregma']) -> 8 anterior-posterior section codes",
+            "coords": "obsm['spatial'] (2D) or obsm['spatial3d'] (3D) centroids",
+            "labels": "obs['Cell_class'] -- niche prototype evaluation",
+        },
+        size="73,655 cells x 161 genes; 8 Bregma levels",
+        notes="Loads via squidpy.datasets.merfish() (figshare 28169379 mirror); resolves "
+        "anonymously. Primary single-cell niche-graph anchor.",
+    ),
     # ---- Visium (spot-resolution robustness only) ----------------------
     "gse208253_oscc_visium": Dataset(
         id="gse208253_oscc_visium",
