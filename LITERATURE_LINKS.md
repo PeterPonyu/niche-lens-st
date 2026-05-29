@@ -21,6 +21,7 @@ guessed DOI.
 | #43 | `omiclip2025` | GEO Series GSE293199 — TNBC Xenium (OmiCLIP source). | https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE293199 | ⚠️ confirm OmiCLIP paper DOI |
 | #45 | `tenx_xenium_lymph_node_2023` | 10x Genomics — Human Lymph Node preview, Xenium Human Multi-Tissue & Cancer panel (CC BY 4.0). | https://www.10xgenomics.com/datasets/human-lymph-node-preview-data-xenium-human-multi-tissue-and-cancer-panel-1-standard | ⚠️ data release (no single paper) |
 | #46 | `zhang2023abcatlas` | Zhang et al. (Zhuang lab), "Molecularly defined and spatially resolved cell atlas of the whole mouse brain", *Nature* (2023). | https://doi.org/10.1038/s41586-023-06808-9 | ✅ DOI from issue #46 |
+| #47 | `vizgen_ffpe_io_2022` | Vizgen MERFISH FFPE Human Immuno-Oncology Data Release (16 samples × 8 tumor types, 500-plex). | https://vizgen.com/human-ffpe-immunooncology-release-roadmap/ | ⚠️ data release (registration) |
 
 ## Notes
 
