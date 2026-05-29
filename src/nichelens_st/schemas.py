@@ -12,7 +12,11 @@ class SchemaError(ValueError):
     """Raised when an input or output object violates the MVP schema."""
 
 
-VALID_PROTO_KIND = {"conserved", "sample_specific"}
+# "unknown" is emitted by the separation head when the conserved vs
+# sample_specific distinction is undefined for the input (e.g. only one
+# section is provided so cross-section presence cannot discriminate them; see
+# nichelens_st.model._separation_head and issue #85).
+VALID_PROTO_KIND = {"conserved", "sample_specific", "unknown"}
 
 
 def validate_inputs(
