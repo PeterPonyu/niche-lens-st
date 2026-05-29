@@ -237,6 +237,21 @@ def fit_niche_model(
 
     Raises ``ImportError`` (with install guidance) if the optional ``[model]``
     extra / torch is not installed.
+
+    Determinism contract
+    --------------------
+    The whole path is reproducible from ``config.seed`` alone:
+
+    1. **Encoder** (``train_embeddings``) seeds torch and enables deterministic
+       algorithms, so ``H`` is bitwise-reproducible on CPU.
+    2. **k-means** (``_kmeans``) draws its k-means++ init from a *local*
+       ``np.random.default_rng(seed)`` -- it does not touch global ``np.random``
+       state, so a fixed seed and ``H`` always yield the same ``prototype_id``.
+    3. **Separation head** and **marker table** are pure deterministic reductions
+       (set membership / stable ``argsort``).
+
+    Hence two runs with the same seed produce identical ``prototype_id``,
+    ``proto_kind`` and ``marker_table``.
     """
     cfg = config or NicheModelConfig()
     # Validate the full input contract up front so callers get a clear
