@@ -1,0 +1,23 @@
+dataset_id: merfish_hypothalamus_shared
+project: NicheLens-ST
+dataset_name: MERFISH mouse hypothalamus preoptic region (Moffitt 2018)
+source: squidpy figshare mirror (figshare 28169379); raw matrix on Dryad doi:10.5061/dryad.8t8s248
+access_call: "squidpy.datasets.merfish()"
+platform: MERFISH (single-molecule imaging)
+size: 73655 cells x 161 genes
+single_cell_resolution: true
+multi_section: true            # obs['Bregma'] = 8 anterior-posterior slices
+raw_counts: false              # normalized in squidpy; raw via Dryad CC0
+labels: obs['Cell_class']
+license: CC0 (Dryad raw) / public figshare mirror
+role: primary; shared smoke/benchmark anchor across sibling repos
+schema_mapping:
+  X: adata.X
+  coords: adata.obsm['spatial'] (2D) or adata.obsm['spatial3d'] (3D)
+  section_id: factorize(adata.obs['Bregma'])
+  edges: per-section kNN via squidpy.gr.spatial_neighbors(library_key=...)
+raw_data_location: data/raw/merfish_hypothalamus_shared/
+processed_data_location: data/processed/merfish_hypothalamus_shared/
+fetch_command: python scripts/data/fetch_datasets.py --dataset merfish_hypothalamus_shared
+verified_in_env: dl (scanpy 1.10.4, squidpy 1.6.5, anndata 0.10.7)
+verified_at_utc: '2026-05-28T00:00:00Z'

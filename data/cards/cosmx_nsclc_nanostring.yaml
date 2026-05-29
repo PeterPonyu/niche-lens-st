@@ -1,0 +1,25 @@
+dataset_id: cosmx_nsclc_nanostring
+project: NicheLens-ST
+dataset_name: CosMx SMI NSCLC lung (He 2022, NanoString)
+source: "s3://nanostring-public-share/SMI-Compressed/Lung9_Rep1/Lung9_Rep1+SMI+Flat+data.tar.gz"
+source_url: https://nanostring-public-share.s3.us-west-2.amazonaws.com/SMI-Compressed/Lung9_Rep1/Lung9_Rep1+SMI+Flat+data.tar.gz
+access_call: "squidpy.read.nanostring(path=..., counts_file=..., meta_file=..., fov_file=...)"
+platform: CosMx SMI (NanoString)
+size: ~800000 cells (2 replicates) x ~1000-gene panel
+single_cell_resolution: true
+multi_section: true            # many FOVs per replicate; per-FOV graphs
+raw_counts: true               # raw integer counts -> DL training source
+labels: cell metadata / typing in obs
+license: NanoString public share
+role: primary raw-counts source for DL model training
+schema_mapping:
+  X: adata.X (raw counts)
+  coords: adata.obsm['spatial']
+  section_id: factorize(adata.obs['fov'])  # optionally combined with replicate id
+  edges: per-FOV kNN via squidpy.gr.spatial_neighbors(library_key=...)
+raw_data_location: data/raw/cosmx_nsclc_nanostring/
+processed_data_location: data/processed/cosmx_nsclc_nanostring/
+fetch_command: python scripts/data/fetch_datasets.py --dataset cosmx_nsclc_nanostring --download
+size_caution: multi-GB; opt-in download only, never in CI/smoke
+verified_in_env: dl (squidpy.read.nanostring present in squidpy 1.6.5)
+verified_at_utc: '2026-05-28T00:00:00Z'
