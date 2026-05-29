@@ -1,0 +1,21 @@
+id: xenium_breast_janesick
+name: Xenium Human Breast Cancer (Janesick)
+platform: Xenium
+tissue: breast cancer
+issues: [#38]
+url_status: verified_page
+page_url: "https://www.10xgenomics.com/products/xenium-in-situ/preview-dataset-human-breast"
+direct_url: null
+reader: squidpy.read.xenium
+citation_key: janesick2023xenium
+size: 313 genes; ~110-170k cells; 0.4-1.5 GB (full outs 8-9 GB)
+raw_count_artifact: cell_feature_matrix.h5, 313-plex (280+33), ~110-170k cells
+raw_count_policy: raw integer count matrix + spatial metadata only; no FASTQ / WSI / normalized-only objects
+contract:
+  X: cell_feature_matrix.h5 / .zarr.zip — raw integer cell x gene counts (float32 on load)
+  coords: cells.parquet / cell_boundaries.parquet segmentation centroids (float32)
+  section_id: per-region / per-sample integer codes (multi-region -> distinct sections)
+  edges: build_graph(coords, section_id, k, 'knn') int64; no cross-section edges
+  labels: derived cluster / annotation (optional, for prototype evaluation)
+  transcripts: transcripts.parquet transcript coordinates (QC / sub-cellular)
+notes: Canonical Xenium demo; ideal first single-cell niche-graph integration test.
