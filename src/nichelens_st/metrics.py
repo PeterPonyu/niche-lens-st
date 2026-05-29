@@ -77,8 +77,14 @@ def section_overlap_rate(
     if len(proto_kind) == 0:
         return float("nan")
     sections = set(section.tolist())
+    # "unknown" tags are emitted when the conserved/sample_specific
+    # distinction is undefined (single-section input, issue #85); they
+    # contribute neither to the numerator nor the denominator.
+    scorable = [(p, k) for p, k in enumerate(proto_kind) if k != "unknown"]
+    if not scorable:
+        return float("nan")
     correct = 0
-    for p, kind in enumerate(proto_kind):
+    for p, kind in scorable:
         seen = set(section[proto == p].tolist())
         if kind == "conserved":
             correct += seen == sections
@@ -86,7 +92,7 @@ def section_overlap_rate(
             correct += len(seen) < len(sections)
         else:
             raise ValueError(f"invalid proto_kind at {p}: {kind!r}")
-    return float(correct / len(proto_kind))
+    return float(correct / len(scorable))
 
 
 def marker_recall_at_k(
