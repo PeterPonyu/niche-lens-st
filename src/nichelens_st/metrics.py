@@ -9,14 +9,19 @@ from scipy.optimize import linear_sum_assignment
 
 
 def adjusted_rand(pred_id: np.ndarray, true_id: np.ndarray) -> float:
-    """Adjusted Rand Index, invariant to label permutations."""
+    """Adjusted Rand Index, invariant to label permutations.
+
+    Returns ``NaN`` when the score is undefined (empty input, single cell, or
+    both partitions degenerate to one cluster) — issue #83. Previously these
+    cases returned ``1.0`` ("perfect"), silently masking collapsed outputs.
+    """
     pred = np.asarray(pred_id)
     true = np.asarray(true_id)
     if pred.shape != true.shape:
         raise ValueError(f"pred_id and true_id shapes differ: {pred.shape} != {true.shape}")
     n = pred.size
     if n < 2:
-        return 1.0
+        return float("nan")
     pred_labels, pred_inv = np.unique(pred, return_inverse=True)
     true_labels, true_inv = np.unique(true, return_inverse=True)
     contingency = np.zeros((pred_labels.size, true_labels.size), dtype=np.int64)
@@ -29,7 +34,8 @@ def adjusted_rand(pred_id: np.ndarray, true_id: np.ndarray) -> float:
     max_index = 0.5 * (row_comb + col_comb)
     denom = max_index - expected
     if denom == 0:
-        return 1.0
+        # Both partitions collapse to one cluster — ARI is undefined.
+        return float("nan")
     return float((sum_comb - expected) / denom)
 
 
@@ -67,8 +73,9 @@ def section_overlap_rate(
     section = np.asarray(section_id)
     if proto.shape != section.shape:
         raise ValueError(f"prototype_id and section_id shapes differ: {proto.shape} != {section.shape}")
+    # Empty catalog → undefined, not a free "perfect" score (issue #83).
     if len(proto_kind) == 0:
-        return 1.0
+        return float("nan")
     sections = set(section.tolist())
     correct = 0
     for p, kind in enumerate(proto_kind):
@@ -90,16 +97,21 @@ def marker_recall_at_k(
         raise ValueError(f"k must be >= 1; got {k}")
     if len(pred_markers) != len(true_markers):
         raise ValueError("pred_markers and true_markers must have the same length")
+    # Empty catalog → undefined, not a free "perfect" score (issue #83).
     if not true_markers:
-        return 1.0
+        return float("nan")
     recalls = []
     for pred, true in zip(pred_markers, true_markers, strict=True):
         true_top = list(true[:k])
         if not true_top:
-            recalls.append(1.0)
+            # Per-prototype truth is empty: recall is undefined for that row.
+            # Skip it so a catalog with no true markers anywhere yields NaN
+            # rather than the previous silent 1.0 (issue #83).
             continue
         pred_top = set(pred[:k])
         recalls.append(len(pred_top.intersection(true_top)) / len(true_top))
+    if not recalls:
+        return float("nan")
     return float(np.mean(recalls))
 
 
