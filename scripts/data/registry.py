@@ -151,6 +151,23 @@ DATASETS: dict[str, Dataset] = {
         "direct_url is the GEO supplementary RAW.tar resolved from the GSE page.",
         direct_url="https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE293199&format=file",
     ),
+    "xenium_lymph_node": Dataset(
+        id="xenium_lymph_node",
+        name="Xenium Human Lymph Node (Multi-Tissue & Cancer panel preview)",
+        platform="Xenium",
+        tissue="lymph node (immune / lymphoid)",
+        issues=(45,),
+        url_status="verified_page",
+        page_url="https://www.10xgenomics.com/datasets/human-lymph-node-preview-data-xenium-human-multi-tissue-and-cancer-panel-1-standard",
+        reader="squidpy.read.xenium",
+        citation_key="tenx_xenium_lymph_node_2023",
+        raw_count_artifact="cell_feature_matrix.h5 raw counts, 377-plex, 377,985 cells",
+        raw_count_policy=RAW_COUNT_POLICY,
+        contract=_XENIUM_CONTRACT,
+        size="377-plex; 377,985 cells",
+        notes="Healthy lymphoid organ -> germinal-centre/T-zone/B-follicle niches "
+        "(immune axis). CC BY 4.0. Direct .h5 hotlink UNVERIFIED -- resolve from page.",
+    ),
     # ---- CosMx SMI ------------------------------------------------------
     "cosmx_nsclc_nanostring": Dataset(
         id="cosmx_nsclc_nanostring",
