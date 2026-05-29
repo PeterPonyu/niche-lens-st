@@ -186,6 +186,26 @@ DATASETS: dict[str, Dataset] = {
         notes="Guessed hubfs hotlink UNVERIFIED -- obtain the bundle link from "
         "info.vizgen.com/mouse-brain-data. 9 aligned slices -> strong multi-section signal.",
     ),
+    # ---- Visium (spot-resolution robustness only) ----------------------
+    "gse208253_oscc_visium": Dataset(
+        id="gse208253_oscc_visium",
+        name="GSE208253 OSCC Visium",
+        platform="Visium v1",
+        tissue="HPV-neg OSCC",
+        issues=(42,),
+        url_status="verified_direct",
+        page_url="https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE208253",
+        reader="scanpy.read_visium / scanpy.read_10x_mtx",
+        citation_key="gse208253_oscc_visium",
+        raw_count_artifact="12x filtered_feature_bc_matrix.h5 raw SPOT counts (RAW.tar 153 MB)",
+        raw_count_policy=RAW_COUNT_POLICY + " (SPOT resolution -- no cell boundaries)",
+        contract=_VISIUM_CONTRACT,
+        size="~18k genes; ~2.5k spots; 12 slides; 153.4 MB",
+        notes="Spot resolution, NOT single-cell -- no cell boundaries. Use ONLY as a "
+        "12-section cross-platform robustness check; each node is a spot, never a cell. "
+        "direct_url is the GEO supplementary RAW.tar.",
+        direct_url="https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE208253&format=file",
+    ),
 }
 
 
