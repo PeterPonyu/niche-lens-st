@@ -18,6 +18,7 @@ guessed DOI.
 | #40 | `bruker_cosmx_brain_2024` | Bruker Spatial Biology — CosMx Human Brain (Frontal Cortex, WTx 6,078-plex) FFPE public dataset (form-gated). | https://www.brukerspatialbiology.com/ | ⚠️ data release (gated) |
 | #41 | `vizgen_mouse_brain_receptor_2021` | Vizgen MERFISH Mouse Brain Receptor Map data release (483-plex, 9 slices). | https://info.vizgen.com/mouse-brain-data | ⚠️ data release (no single paper) |
 | #42 | `gse208253_oscc_visium` | GEO Series GSE208253 — HPV-negative OSCC Visium (12 slides). | https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE208253 | ⚠️ confirm associated paper |
+| #43 | `omiclip2025` | GEO Series GSE293199 — TNBC Xenium (OmiCLIP source). | https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE293199 | ⚠️ confirm OmiCLIP paper DOI |
 
 ## Notes
 
