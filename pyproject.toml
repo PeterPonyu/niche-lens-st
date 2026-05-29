@@ -13,7 +13,9 @@ authors = [{ name = "PeterPonyu", email = "fuzeyu09@gmail.com" }]
 dependencies = ["numpy>=1.26,<3", "scipy>=1.11,<2"]
 
 [project.optional-dependencies]
-test = ["pytest>=8,<9"]
+# `tomllib` is stdlib only on Python >= 3.11; the packaging-contract tests
+# read pyproject.toml, so pull in `tomli` as a backport on 3.10.
+test = ["pytest>=8,<9", "tomli>=2,<3; python_version < '3.11'"]
 # Optional deep-learning extra for the contrastive niche encoder
 # (nichelens_st.model / nichelens_st.encoder). The base package stays
 # dependency-light (numpy/scipy) and imports without torch; the encoder import
@@ -33,6 +35,15 @@ Homepage = "https://github.com/PeterPonyu/niche-lens-st"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# Ruff's default rule set (pyflakes + a curated pycodestyle subset). Kept
+# explicit so the CI lint gate is reproducible across ruff versions.
+select = ["E4", "E7", "E9", "F"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
