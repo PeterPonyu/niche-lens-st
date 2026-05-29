@@ -245,5 +245,6 @@ in CI/smoke; ⚠️ flags are preserved until the official bundle URL is resolve
 | #38 | `xenium_breast_janesick` | ✅ page verified · hotlink ⚠️ (canonical first integration test) |
 | #39 | `cosmx_nsclc_nanostring` | ✅ Lung9_Rep1 public; resolve flat-file bundle from page |
 | #40 | `cosmx_brain_frontal_cortex` | ⚠️ form-gated (manual) |
+| #41 | `merfish_mouse_brain_receptor_map` | ⚠️ UNVERIFIED hotlink (resolve from vizgen page) |
 
 Source papers for every dataset are tracked in [`LITERATURE_LINKS.md`](../LITERATURE_LINKS.md).
