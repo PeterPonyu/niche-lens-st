@@ -14,6 +14,7 @@ guessed DOI.
 |-------|--------------|-----------------------------|------|------|
 | #37 | `tenx_xenium_skin_2023` | 10x Genomics — Xenium Human Multi-Tissue & Cancer panel, Skin/Melanoma public dataset (CC BY 4.0). Cited in the STORM data-availability statement. | https://www.10xgenomics.com/datasets/human-skin-data-xenium-human-multi-tissue-and-cancer-panel | ⚠️ data release (no single paper) |
 | #38 | `janesick2023xenium` | Janesick et al., "High resolution mapping of the tumor microenvironment using integrated single-cell, spatial and in situ analysis", *Nature Communications* (2023). | https://doi.org/10.1038/s41467-023-43458-x | ⚠️ confirm DOI vs. data-availability |
+| #39 | `he2022cosmx` | He et al., "High-plex imaging of RNA and proteins at subcellular resolution in fixed tissue by spatial molecular imaging", *Nature Biotechnology* (2022) — CosMx SMI / Lung9. | https://doi.org/10.1038/s41587-022-01483-z | ⚠️ confirm DOI |
 
 ## Notes
 

@@ -133,6 +133,24 @@ DATASETS: dict[str, Dataset] = {
         size="313 genes; ~110-170k cells; 0.4-1.5 GB (full outs 8-9 GB)",
         notes="Canonical Xenium demo; ideal first single-cell niche-graph integration test.",
     ),
+    # ---- CosMx SMI ------------------------------------------------------
+    "cosmx_nsclc_nanostring": Dataset(
+        id="cosmx_nsclc_nanostring",
+        name="CosMx Human NSCLC (Lung9 public)",
+        platform="CosMx SMI",
+        tissue="NSCLC (8 FFPE)",
+        issues=(39,),
+        url_status="verified_page",
+        page_url="https://nanostring.com/products/cosmx-spatial-molecular-imager/ffpe-dataset/nsclc-ffpe-dataset/",
+        reader="squidpy.read.nanostring",
+        citation_key="he2022cosmx",
+        raw_count_artifact="*_exprMat_file.csv raw cell-by-gene, 960-plex, >800k cells",
+        raw_count_policy=RAW_COUNT_POLICY,
+        contract=_COSMX_CONTRACT,
+        size="960-plex; 50k-100k cells per rep; 2-5 GB",
+        notes="Lung9_Rep1 distributed via NanoString/Bruker public S3. Per-FOV section_id. "
+        "Resolve the Lung9_Rep1 flat-file bundle URL from the dataset page before download.",
+    ),
 }
 
 
