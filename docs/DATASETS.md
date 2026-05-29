@@ -265,6 +265,14 @@ no URL to resolve, real loaders wired in `fetch_datasets.py`.
 
 ---
 
+## Matched multi-platform benchmark
+
+| Issue | Dataset | Platforms | Why it fits | Access |
+|-------|---------|-----------|-------------|--------|
+| #133 | Wang 2025 iST FFPE matched TMA | Xenium + MERSCOPE + CosMx (+ scRNA) | The **same physical sections** (17 tumor + 16 normal types) profiled on three high-plex platforms → gold for separating **platform-invariant** niches from technology-specific artifacts. Loaders must preserve cross-technology section matching so subgraphs stay comparable. | ⚠️ URL UNVERIFIED — resolve the per-platform bundles from the Wang 2025 data-availability statement; never fabricate a hotlink. |
+
+---
+
 ## Consolidated ingestion roadmap (per issue)
 
 Every dataset is registered in `scripts/data/registry.py` with a `data/cards/<id>.yaml`
@@ -287,5 +295,6 @@ in CI/smoke; ⚠️ flags are preserved until the official bundle URL is resolve
 | #49 | `cosmx_wtx_colon` | ⚠️ form-gated (upgrades #39/#40) |
 | #55 | `merfish_hypothalamus_moffitt` | ✅ squidpy builtin (real loader) |
 | #56 | `seqfish_mouse_embryo_lohoff` | ✅ squidpy builtin (real loader) |
+| #133 | `wang2025_matched_tma` | ⚠️ UNVERIFIED (resolve from data-availability statement) |
 
 Source papers for every dataset are tracked in [`LITERATURE_LINKS.md`](../LITERATURE_LINKS.md).

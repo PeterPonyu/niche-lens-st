@@ -340,6 +340,29 @@ DATASETS: dict[str, Dataset] = {
         notes="Loads via squidpy.datasets.seqfish() (figshare 26098403 mirror). "
         "Per-FOV section isolation required.",
     ),
+    "wang2025_matched_tma": Dataset(
+        id="wang2025_matched_tma",
+        name="Wang 2025 iST FFPE matched multi-platform TMA (Xenium + MERSCOPE + CosMx)",
+        platform="Xenium + MERSCOPE + CosMx (matched)",
+        tissue="matched TMAs: 17 tumor + 16 normal types",
+        issues=(133,),
+        url_status="unverified",
+        page_url="",
+        reader="per-platform: squidpy.read.xenium / read.vizgen / read.nanostring",
+        citation_key="wang2025ist",
+        raw_count_artifact="per-platform raw count matrices + segmentation centroids (matched sections)",
+        raw_count_policy=RAW_COUNT_POLICY,
+        contract={
+            **_XENIUM_CONTRACT,
+            "section_id": "matched TMA core / platform code; loaders must PRESERVE cross-"
+            "technology section matching so subgraphs stay platform-comparable",
+        },
+        size="matched TMAs: 17 tumor + 16 normal types across 3 high-plex platforms + scRNA",
+        notes="Registry #24. Same physical sections on Xenium + MERSCOPE + CosMx -> gold "
+        "for platform-invariant vs technology-specific niches. URL UNVERIFIED -- resolve "
+        "the per-platform bundles from the Wang 2025 data-availability statement; never "
+        "fabricate a hotlink.",
+    ),
     # ---- Visium (spot-resolution robustness only) ----------------------
     "gse208253_oscc_visium": Dataset(
         id="gse208253_oscc_visium",
