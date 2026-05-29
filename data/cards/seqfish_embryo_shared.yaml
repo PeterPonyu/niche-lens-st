@@ -1,0 +1,23 @@
+dataset_id: seqfish_embryo_shared
+project: NicheLens-ST
+dataset_name: seqFISH mouse organogenesis embryo (Lohoff 2022)
+source: squidpy figshare mirror (figshare 26098403)
+access_call: "squidpy.datasets.seqfish()"
+platform: seqFISH+ (single-molecule imaging)
+size: 19416 cells x 351 genes
+single_cell_resolution: true
+multi_section: true            # 3 embryo fields of view
+raw_counts: false              # normalized subset
+labels: obs cell-type labels (e.g. celltype_mapped_refined)
+license: public figshare mirror
+role: primary; shared smoke/benchmark anchor across sibling repos
+schema_mapping:
+  X: adata.X
+  coords: adata.obsm['spatial'] (2D)
+  section_id: factorize(adata.obs embryo/FOV column)
+  edges: per-section kNN via squidpy.gr.spatial_neighbors(library_key=...)
+raw_data_location: data/raw/seqfish_embryo_shared/
+processed_data_location: data/processed/seqfish_embryo_shared/
+fetch_command: python scripts/data/fetch_datasets.py --dataset seqfish_embryo_shared
+verified_in_env: dl (scanpy 1.10.4, squidpy 1.6.5, anndata 0.10.7)
+verified_at_utc: '2026-05-28T00:00:00Z'

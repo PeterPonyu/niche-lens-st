@@ -1,10 +1,11 @@
 # NicheLens-ST dataset integration guide
 
 Status: dataset-integration plan. This document maps the **audited & corrected**
-ST dataset registry onto NicheLens-ST's actual ingestion path. It is the
-real-data companion to [`docs/DATA.md`](DATA.md) (which covers the
-squidpy-native smoke anchors A1/A2/B7) and tracks the larger imaging-ST corpus
-we intend to wire in next.
+ST dataset registry onto NicheLens-ST's actual ingestion path. It has two parts:
+**[Tier B — Python-native quick-load](#tier-b--python-native-quick-load-squidpyscanpy)**
+(zero-glue squidpy/scanpy anchors for fast iteration and smoke tests) and the
+larger imaging-ST corpus (the *Recommended datasets* table) we intend to wire in
+next.
 
 **Canonical source of truth:**
 `~/Desktop/ST_research/datasets/DATASET_REGISTRY.md` (audited 2026-05-28).
@@ -69,6 +70,99 @@ Per-dataset specifics live in `data/cards/<dataset_id>.yaml`
 
 ---
 
+## Tier B — Python-native quick-load (squidpy/scanpy)
+
+Before the larger imaging-ST corpus below, Tier B gives **zero-glue, one-line**
+anchors that load straight to AnnData in the conda env `dl` (scanpy 1.10.4,
+squidpy 1.6.5, anndata 0.10.7) — ideal for fast iteration and smoke tests. IDs
+match **Tier B of the canonical registry**
+(`~/Desktop/ST_research/datasets/DATASET_REGISTRY.md`); fuller per-dataset notes
+live in `~/Desktop/ST_research/references/DATASET_CATALOG.md` (catalog rows
+A1/A2/B7).
+
+> **Policy note (Tier B).** The project rule is raw counts for *training* and no
+> FASTQ/WSI. The MERFISH/seqFISH squidpy anchors are **normalized** subsets —
+> they are used for fast iteration and shape/dtype smoke tests, not as DL
+> training counts. For raw-count training, pull the **raw source** listed
+> (MERFISH → Dryad CC0) or use the **CosMx** raw counts. No FASTQ/BAM/WSI is
+> introduced by Tier B.
+
+| ID | Dataset | Loader / access | Platform | Size (cells × genes) | SC-res | Multi-section | Labels | Raw counts | License | Role |
+|----|---------|-----------------|----------|----------------------|:------:|:-------------:|--------|------------|---------|------|
+| B1 | MERFISH mouse hypothalamus (Moffitt 2018) | `squidpy.datasets.merfish()` | MERFISH (imaging) | 73,655 × 161 | yes | yes — `obs['Bregma']`, 8 AP levels; `obsm['spatial3d']` | `obs['Cell_class']` | normalized; **raw via Dryad CC0** (`doi:10.5061/dryad.8t8s248`) | CC0 (raw) / public figshare mirror | ★ primary, shared anchor |
+| B2 | seqFISH mouse embryo (Lohoff 2022) | `squidpy.datasets.seqfish()` | seqFISH+ (imaging) | 19,416 × 351 | yes | yes — 3 embryo FOVs | cell-type labels (`obs`) | normalized; raw via source paper | public figshare mirror | ★ primary, shared anchor |
+| — | CosMx NSCLC (He 2022, NanoString) | `squidpy.read.nanostring()` on the Lung9 S3 tarball | CosMx SMI | ~800k (2 reps) × ~1k panel | yes | yes — per-FOV (`obs['fov']`) | cell metadata / typing | **yes (raw)** | NanoString public | ★ raw-counts DL source (= reg #12 / catalog B7) |
+
+B1 and B2 are the **shared smoke/benchmark anchors** reused across the sibling
+repos in this research family, so one on-disk cache serves all of them. Use them
+for fast iteration; use CosMx when raw counts and ~800k single cells are needed
+for model training. CosMx is the squidpy-native quick-load view of the same
+dataset wired as registry **#12** (Lung9_Rep1) in the table below — its exact
+verified S3 URL, download gating, and card all live in
+`scripts/data/fetch_datasets.py` + `data/cards/cosmx_nsclc_nanostring.yaml`.
+
+### Per-dataset input-contract mapping
+
+| Contract field | B1 MERFISH | B2 seqFISH | CosMx NSCLC |
+|---|---|---|---|
+| `X` (n_cells × n_genes) | `adata.X` (normalized) | `adata.X` (normalized) | `adata.X` (**raw counts**) |
+| `coords` | `obsm['spatial']` (2D) / `obsm['spatial3d']` (3D) | `obsm['spatial']` (2D) | `obsm['spatial']` |
+| `section_id` | factorize `obs['Bregma']` | factorize embryo/FOV `obs` column | factorize `obs['fov']` |
+| `edges` | per-section kNN (below) | per-section kNN (below) | per-FOV kNN (below) |
+
+### Per-section graph (no cross-section edges)
+
+squidpy builds a separate neighbor graph per section when you pass `library_key`,
+so no edge crosses a section / FOV boundary — exactly what the input contract in
+`docs/MVP_DESIGN.md` requires. The squidpy-backed helper
+`build_contract(adata, section_key, …)` in `scripts/data/fetch_datasets.py`
+wraps this:
+
+```python
+import numpy as np
+import squidpy as sq
+from scipy.sparse import triu
+
+adata = sq.datasets.merfish()                         # B1; or sq.datasets.seqfish()
+section_id = adata.obs["Bregma"].astype("category").cat.codes.to_numpy()
+adata.obs["_section_id"] = section_id.astype(str)
+
+sq.gr.spatial_neighbors(
+    adata, coord_type="generic", n_neighs=8,
+    library_key="_section_id",      # graph computed independently per section
+)
+conn = triu(adata.obsp["spatial_connectivities"].tocoo())
+edges = np.vstack([conn.row, conn.col]).astype(np.int64)   # (2, n_edges) COO
+assert (section_id[edges[0]] == section_id[edges[1]]).all() # no cross-section edge
+```
+
+`Delaunay=True` can replace `n_neighs` for a Delaunay graph; `library_key` still
+guarantees per-section isolation.
+
+### Cell-cell communication (ligand-receptor) — no extra download
+
+The MVP `interaction_summary` output is backed by `squidpy.gr.ligrec()`, which
+uses the **OmniPath** ligand-receptor backend (a superset of CellPhoneDB) and
+runs on **any AnnData with a cell-type label** — nothing to download into
+`data/`:
+
+```python
+import squidpy as sq
+
+adata = sq.datasets.merfish()
+res = sq.gr.ligrec(
+    adata, cluster_key="Cell_class",   # cell-type / niche label column
+    n_perms=100, threshold=0.01, copy=True, seed=0,
+)
+# res["means"], res["pvalues"]: per cluster-pair ligand-receptor tables
+```
+
+Pair the results with per-niche labels (`prototype_id`) to build the
+`interaction_summary` table. OmniPath resolves and caches its reference at call
+time, so the CCC path needs no `data/` entry.
+
+---
+
 ## Recommended datasets
 
 | # | Dataset | Accession / page | Platform | Tissue / disease | Size | Link | Niche-graph fit (cell boundaries / transcript coords) |
@@ -82,8 +176,8 @@ Per-dataset specifics live in `data/cards/<dataset_id>.yaml`
 | 15 | GSE208253 (OSCC Visium) | GEO `GSE208253` | Visium v1 | HPV-neg OSCC | ~18k genes · ~2.5k spots · 12 slides · 153.4 MB | ✅ `ncbi.nlm.nih.gov/geo` (`GSE208253_RAW.tar`) | ⚠️ **spot resolution, not single-cell — no cell boundaries.** Use as a 12-section cross-platform robustness check; each node is a spot, not a cell. |
 | 18 | GSE293199 (TNBC Xenium) | GEO `GSE293199` | Xenium | TNBC | 280-panel · ~160k cells · 13.6 GB full `RAW.tar` (subset ~3 GB) | ✅ `ncbi.nlm.nih.gov/geo` (OmiCLIP source) | Single-cell Xenium with boundaries/transcripts; TNBC tumor-immune niches; start from the ~3 GB subset. |
 
-> **Also tagged for NicheLens-ST in the registry (multi-platform, shared with
-> factorgraph-st):** Cervilla 2026 Xenium & CosMx (Zenodo **17986017**, ✅) and
+> **Also tagged for NicheLens-ST in the registry (multi-platform, shared with a
+> sibling multi-section repo):** Cervilla 2026 Xenium & CosMx (Zenodo **17986017**, ✅) and
 > XeniumMT & 5K (Zenodo **18000256**, ✅). Not in the first-pull set below; pull
 > on demand if a matched multi-platform niche cohort is needed.
 
