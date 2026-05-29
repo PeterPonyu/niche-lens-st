@@ -257,6 +257,7 @@ no URL to resolve, real loaders wired in `fetch_datasets.py`.
 | Issue | Dataset | Platform | Loader | Size | Section key / labels |
 |-------|---------|----------|--------|------|----------------------|
 | #55 | MERFISH Mouse Hypothalamus Preoptic (Moffitt 2018) | MERFISH | `squidpy.datasets.merfish()` (figshare 28169379) | 73,655 × 161 | `Bregma` → 8 sections; `obs['Cell_class']`; 3D `obsm['spatial3d']`. Raw counts via Dryad `doi:10.5061/dryad.8t8s248` (CC0) for DL. |
+| #56 | seqFISH Mouse Organogenesis Embryo (Lohoff 2022) | seqFISH | `squidpy.datasets.seqfish()` (figshare 26098403) | 19,416 × 351 | embryo/FOV col → 3 sections; `obs['celltype_mapped_refined']`. Raw counts via Lohoff 2022 source for DL. |
 
 > The squidpy mirrors ship **normalized** matrices — fine for graph/encoder smoke
 > tests, but DL training pulls the **raw** counts from the cited Dryad / source
@@ -285,5 +286,6 @@ in CI/smoke; ⚠️ flags are preserved until the official bundle URL is resolve
 | #48 | `xenium_prime_5k_cancer` | ✅ pages verified · hotlinks ⚠️ (upgrades #37/#38) |
 | #49 | `cosmx_wtx_colon` | ⚠️ form-gated (upgrades #39/#40) |
 | #55 | `merfish_hypothalamus_moffitt` | ✅ squidpy builtin (real loader) |
+| #56 | `seqfish_mouse_embryo_lohoff` | ✅ squidpy builtin (real loader) |
 
 Source papers for every dataset are tracked in [`LITERATURE_LINKS.md`](../LITERATURE_LINKS.md).

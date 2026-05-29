@@ -1,0 +1,21 @@
+id: seqfish_mouse_embryo_lohoff
+name: seqFISH Mouse Organogenesis Embryo (Lohoff 2022)
+platform: seqFISH
+tissue: mouse organogenesis embryo (3 FOVs)
+issues: [#56]
+url_status: squidpy_builtin
+page_url: "https://doi.org/10.1038/s41587-021-01006-2"
+direct_url: null
+reader: squidpy.datasets.seqfish
+citation_key: lohoff2022seqfish
+size: 19,416 cells x 351 genes; 3 embryo FOVs
+raw_count_artifact: squidpy anchor normalized subset; raw counts via Lohoff 2022 source
+raw_count_policy: squidpy mirror is normalized; use source raw counts for DL training
+contract:
+  X: cell_by_gene.csv — raw integer cell x gene counts (float32 on load)
+  coords: obsm['spatial'] (2D centroids)
+  section_id: factorize(obs[embryo/FOV column]) -> 3 section codes
+  edges: build_graph(coords, section_id, k, 'knn') int64; no cross-section edges
+  labels: obs['celltype_mapped_refined'] -- niche prototype evaluation
+  transcripts: n/a in squidpy mirror
+notes: Loads via squidpy.datasets.seqfish() (figshare 26098403 mirror). Per-FOV section isolation required.

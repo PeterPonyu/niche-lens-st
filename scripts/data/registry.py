@@ -317,6 +317,29 @@ DATASETS: dict[str, Dataset] = {
         notes="Loads via squidpy.datasets.merfish() (figshare 28169379 mirror); resolves "
         "anonymously. Primary single-cell niche-graph anchor.",
     ),
+    "seqfish_mouse_embryo_lohoff": Dataset(
+        id="seqfish_mouse_embryo_lohoff",
+        name="seqFISH Mouse Organogenesis Embryo (Lohoff 2022)",
+        platform="seqFISH",
+        tissue="mouse organogenesis embryo (3 FOVs)",
+        issues=(56,),
+        url_status="squidpy_builtin",
+        page_url="https://doi.org/10.1038/s41587-021-01006-2",
+        reader="squidpy.datasets.seqfish",
+        citation_key="lohoff2022seqfish",
+        raw_count_artifact="squidpy anchor normalized subset; raw counts via Lohoff 2022 source",
+        raw_count_policy="squidpy mirror is normalized; use source raw counts for DL training",
+        contract={
+            **_MERFISH_CONTRACT,
+            "section_id": "factorize(obs[embryo/FOV column]) -> 3 section codes",
+            "coords": "obsm['spatial'] (2D centroids)",
+            "labels": "obs['celltype_mapped_refined'] -- niche prototype evaluation",
+            "transcripts": "n/a in squidpy mirror",
+        },
+        size="19,416 cells x 351 genes; 3 embryo FOVs",
+        notes="Loads via squidpy.datasets.seqfish() (figshare 26098403 mirror). "
+        "Per-FOV section isolation required.",
+    ),
     # ---- Visium (spot-resolution robustness only) ----------------------
     "gse208253_oscc_visium": Dataset(
         id="gse208253_oscc_visium",
