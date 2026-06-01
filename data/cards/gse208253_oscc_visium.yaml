@@ -2,7 +2,7 @@ id: gse208253_oscc_visium
 name: GSE208253 OSCC Visium
 platform: Visium v1
 tissue: HPV-neg OSCC
-issues: [#42]
+issues: [42]
 url_status: verified_direct
 page_url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE208253"
 direct_url: "https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE208253&format=file"

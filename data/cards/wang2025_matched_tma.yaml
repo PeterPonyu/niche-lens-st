@@ -2,7 +2,7 @@ id: wang2025_matched_tma
 name: Wang 2025 iST FFPE matched multi-platform TMA (Xenium + MERSCOPE + CosMx)
 platform: Xenium + MERSCOPE + CosMx (matched)
 tissue: "matched TMAs: 17 tumor + 16 normal types"
-issues: [#133]
+issues: [133]
 url_status: unverified
 page_url: ""
 direct_url: null

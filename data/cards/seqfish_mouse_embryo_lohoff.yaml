@@ -2,7 +2,7 @@ id: seqfish_mouse_embryo_lohoff
 name: seqFISH Mouse Organogenesis Embryo (Lohoff 2022)
 platform: seqFISH
 tissue: mouse organogenesis embryo (3 FOVs)
-issues: [#56]
+issues: [56]
 url_status: squidpy_builtin
 page_url: "https://doi.org/10.1038/s41587-021-01006-2"
 direct_url: null

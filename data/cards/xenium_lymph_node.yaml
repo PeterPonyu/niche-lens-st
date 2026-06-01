@@ -2,7 +2,7 @@ id: xenium_lymph_node
 name: Xenium Human Lymph Node (Multi-Tissue & Cancer panel preview)
 platform: Xenium
 tissue: lymph node (immune / lymphoid)
-issues: [#45]
+issues: [45]
 url_status: verified_page
 page_url: "https://www.10xgenomics.com/datasets/human-lymph-node-preview-data-xenium-human-multi-tissue-and-cancer-panel-1-standard"
 direct_url: null

@@ -2,7 +2,7 @@ id: xenium_breast_janesick
 name: Xenium Human Breast Cancer (Janesick)
 platform: Xenium
 tissue: breast cancer
-issues: [#38]
+issues: [38]
 url_status: verified_page
 page_url: "https://www.10xgenomics.com/products/xenium-in-situ/preview-dataset-human-breast"
 direct_url: null
