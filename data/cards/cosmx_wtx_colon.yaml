@@ -2,7 +2,7 @@ id: cosmx_wtx_colon
 name: CosMx Human Whole Transcriptome (WTx) Colon (sigmoid adenocarcinoma)
 platform: CosMx SMI
 tissue: sigmoid colon adenocarcinoma (Stage IVA)
-issues: [#49]
+issues: [49]
 url_status: gated
 page_url: "https://www.brukerspatialbiology.com/products/cosmx-spatial-molecular-imager/ffpe-dataset/cosmx-human-whole-transcriptome-colon-dataset/"
 direct_url: null

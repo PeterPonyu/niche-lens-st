@@ -2,7 +2,7 @@ id: xenium_prime_5k_cancer
 name: Xenium Prime 5K human cancer cohort (Pan Tissue & Pathways panel)
 platform: Xenium Prime
 tissue: skin melanoma / breast / ovarian / cervical cancer
-issues: [#48]
+issues: [48]
 url_status: verified_page
 page_url: "https://www.10xgenomics.com/datasets/xenium-prime-ffpe-human-skin"
 direct_url: null

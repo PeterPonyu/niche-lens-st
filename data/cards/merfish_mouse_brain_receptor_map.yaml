@@ -2,7 +2,7 @@ id: merfish_mouse_brain_receptor_map
 name: MERFISH Mouse Brain Receptor Map (9-slice)
 platform: MERFISH
 tissue: mouse brain
-issues: [#41]
+issues: [41]
 url_status: unverified
 page_url: "https://info.vizgen.com/mouse-brain-data"
 direct_url: null

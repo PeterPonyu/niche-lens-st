@@ -2,7 +2,7 @@ id: ligrec_omnipath
 name: Cell-cell communication via squidpy.gr.ligrec (OmniPath)
 platform: derived (any loaded AnnData with a cell-type label)
 tissue: n/a (runs on any ingested dataset)
-issues: [#57]
+issues: [57]
 url_status: derived
 page_url: "https://omnipathdb.org/"
 direct_url: null

@@ -2,7 +2,7 @@ id: xenium_skin_melanoma
 name: Xenium Human Skin / Dermal Melanoma (Multi-Tissue & Cancer panel)
 platform: Xenium
 tissue: skin / dermal melanoma
-issues: [#37]
+issues: [37]
 url_status: verified_page
 page_url: "https://www.10xgenomics.com/datasets/human-skin-data-xenium-human-multi-tissue-and-cancer-panel"
 direct_url: null

@@ -2,7 +2,7 @@ id: merfish_hypothalamus_moffitt
 name: MERFISH Mouse Hypothalamus Preoptic Region (Moffitt 2018)
 platform: MERFISH
 tissue: mouse hypothalamus preoptic region
-issues: [#55]
+issues: [55]
 url_status: squidpy_builtin
 page_url: "https://doi.org/10.5061/dryad.8t8s248"
 direct_url: null

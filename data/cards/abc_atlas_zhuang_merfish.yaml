@@ -2,7 +2,7 @@ id: abc_atlas_zhuang_merfish
 name: Allen ABC Atlas - Zhuang MERFISH whole mouse brain
 platform: MERFISH
 tissue: whole mouse brain (atlas-scale, many sections)
-issues: [#46]
+issues: [46]
 url_status: verified_page
 page_url: "https://alleninstitute.github.io/abc_atlas_access/descriptions/Zhuang-ABCA-1.html"
 direct_url: null

@@ -106,7 +106,7 @@ def card_text(ds: Dataset) -> str:
     lines.append(f"name: {_yaml_scalar(ds.name)}")
     lines.append(f"platform: {_yaml_scalar(ds.platform)}")
     lines.append(f"tissue: {_yaml_scalar(ds.tissue)}")
-    lines.append("issues: [" + ", ".join("#" + str(n) for n in ds.issues) + "]")
+    lines.append("issues: [" + ", ".join(str(n) for n in ds.issues) + "]")
     lines.append(f"url_status: {_yaml_scalar(ds.url_status)}")
     lines.append(f"page_url: {_yaml_scalar(ds.page_url)}")
     lines.append(f"direct_url: {_yaml_scalar(ds.direct_url)}")

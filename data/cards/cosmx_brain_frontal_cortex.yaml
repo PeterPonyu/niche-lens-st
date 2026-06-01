@@ -2,7 +2,7 @@ id: cosmx_brain_frontal_cortex
 name: CosMx Human Brain (Frontal Cortex, WTx)
 platform: CosMx SMI
 tissue: frontal cortex FFPE
-issues: [#40]
+issues: [40]
 url_status: gated
 page_url: "https://www.brukerspatialbiology.com/"
 direct_url: null

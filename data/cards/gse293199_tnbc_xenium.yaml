@@ -2,7 +2,7 @@ id: gse293199_tnbc_xenium
 name: GSE293199 TNBC Xenium (OmiCLIP source)
 platform: Xenium
 tissue: triple-negative breast cancer
-issues: [#43]
+issues: [43]
 url_status: verified_direct
 page_url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE293199"
 direct_url: "https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE293199&format=file"

@@ -2,7 +2,7 @@ id: vizgen_ffpe_io_merfish
 name: Vizgen MERFISH FFPE Human Immuno-Oncology (16 samples x 8 tumor types)
 platform: MERFISH
 tissue: human multi-cancer (colon/liver/melanoma/ovarian/prostate/lung/breast/uterine)
-issues: [#47]
+issues: [47]
 url_status: gated
 page_url: "https://vizgen.com/human-ffpe-immunooncology-release-roadmap/"
 direct_url: null

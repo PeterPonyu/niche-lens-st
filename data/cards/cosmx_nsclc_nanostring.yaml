@@ -2,7 +2,7 @@ id: cosmx_nsclc_nanostring
 name: CosMx Human NSCLC (Lung9 public)
 platform: CosMx SMI
 tissue: NSCLC (8 FFPE)
-issues: [#39]
+issues: [39]
 url_status: verified_page
 page_url: "https://nanostring.com/products/cosmx-spatial-molecular-imager/ffpe-dataset/nsclc-ffpe-dataset/"
 direct_url: null
