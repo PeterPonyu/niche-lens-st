@@ -457,7 +457,7 @@ def main() -> int:
         "normalization": prior_meta.get("normalization", {"applied": False, "method": "none"}),
         "interpretability": interp,
         "notes": prior_meta.get("notes", "")
-        + f"; further_niche_metrics appended (G3): composition+DE+per_niche_morans"
+        + "; further_niche_metrics appended (G3): composition+DE+per_niche_morans"
         + f"+coloc(perm={N_PERMUTATIONS})+domain_agreement+k_sweep(5..20)+pca_baseline"
         + f"; further_runtime_s={elapsed:.2f}",
     }
