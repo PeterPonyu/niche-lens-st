@@ -1,0 +1,21 @@
+id: merfish_mouse_brain_receptor_map
+name: MERFISH Mouse Brain Receptor Map (9-slice)
+platform: MERFISH
+tissue: mouse brain
+issues: [41]
+url_status: unverified
+page_url: "https://info.vizgen.com/mouse-brain-data"
+direct_url: null
+reader: squidpy.read.vizgen
+citation_key: vizgen_mouse_brain_receptor_2021
+size: 483 genes; 734,696 cells; 9 slices (3 coronal x 3 rep); 3-7 GB
+raw_count_artifact: "..._cell_by_gene_S#R#.csv raw counts, 483-plex, 734,696 cells"
+raw_count_policy: raw integer count matrix + spatial metadata only; no FASTQ / WSI / normalized-only objects
+contract:
+  X: cell_by_gene.csv — raw integer cell x gene counts (float32 on load)
+  coords: cell_metadata.csv centroids (center_x/center_y, optional z) (float32)
+  section_id: per-slice / per-section integer codes (e.g. Bregma / brain_section_label)
+  edges: build_graph(coords, section_id, k, 'knn') int64; no cross-section edges
+  labels: obs cell-class labels where shipped (optional)
+  transcripts: detected_transcripts.csv (where shipped)
+notes: Guessed hubfs hotlink UNVERIFIED -- obtain the bundle link from info.vizgen.com/mouse-brain-data. 9 aligned slices -> strong multi-section signal.

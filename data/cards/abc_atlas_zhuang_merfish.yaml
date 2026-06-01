@@ -1,0 +1,21 @@
+id: abc_atlas_zhuang_merfish
+name: Allen ABC Atlas - Zhuang MERFISH whole mouse brain
+platform: MERFISH
+tissue: whole mouse brain (atlas-scale, many sections)
+issues: [46]
+url_status: verified_page
+page_url: "https://alleninstitute.github.io/abc_atlas_access/descriptions/Zhuang-ABCA-1.html"
+direct_url: null
+reader: anndata.read_h5ad (ABC Atlas AWS S3 public bucket)
+citation_key: zhang2023abcatlas
+size: "e.g. Zhuang-ABCA-1: 1122-plex, 4.2M cells, 147 sections"
+raw_count_artifact: .h5ad raw cell-by-gene counts + metadata (x,y centroids, z, brain_section_label, CCF)
+raw_count_policy: raw integer count matrix + spatial metadata only; no FASTQ / WSI / normalized-only objects
+contract:
+  X: cell_by_gene.csv — raw integer cell x gene counts (float32 on load)
+  coords: metadata x,y centroids (+ z) and CCF coordinates (float32)
+  section_id: obs['brain_section_label'] -> integer codes (100s of serial sections)
+  edges: build_graph(coords, section_id, k, 'knn') int64; no cross-section edges
+  labels: obs cell-class labels where shipped (optional)
+  transcripts: detected_transcripts.csv (where shipped)
+notes: Open AWS S3 Public Dataset (CC BY 4.0, no gating) -- the only fully-open pull of the multi-section set. Resolve S3 object paths via abc_atlas_access docs.
