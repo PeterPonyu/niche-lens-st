@@ -1,0 +1,21 @@
+id: cosmx_nsclc_nanostring
+name: CosMx Human NSCLC (Lung9 public)
+platform: CosMx SMI
+tissue: NSCLC (8 FFPE)
+issues: [39]
+url_status: verified_page
+page_url: "https://nanostring.com/products/cosmx-spatial-molecular-imager/ffpe-dataset/nsclc-ffpe-dataset/"
+direct_url: null
+reader: squidpy.read.nanostring
+citation_key: he2022cosmx
+size: 960-plex; 50k-100k cells per rep; 2-5 GB
+raw_count_artifact: "*_exprMat_file.csv raw cell-by-gene, 960-plex, >800k cells"
+raw_count_policy: raw integer count matrix + spatial metadata only; no FASTQ / WSI / normalized-only objects
+contract:
+  X: "*_exprMat_file.csv — raw integer cell x gene counts (float32 on load)"
+  coords: "*_metadata_file.csv CenterX/Y_global_px centroids (float32)"
+  section_id: obs['fov'] per-FOV integer codes; graph must never bridge FOVs
+  edges: build_graph(coords, section_id, k, 'knn') int64; no cross-FOV edges
+  labels: derived annotation (optional)
+  transcripts: "*_tx_file.csv transcript locations + per-cell polygon files"
+notes: Lung9_Rep1 distributed via NanoString/Bruker public S3. Per-FOV section_id. Resolve the Lung9_Rep1 flat-file bundle URL from the dataset page before download.

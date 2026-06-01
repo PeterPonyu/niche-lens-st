@@ -18,6 +18,11 @@ baseline_repos/*
 # OMC runtime state (created if tooling is invoked with this repo as cwd)
 .omc/
 
+# Dataset cache (written by scripts/data/fetch_datasets.py) — only data/cards/ is tracked
+data/raw/
+data/processed/
+data/cache/
+
 # Generated outputs
 results/*
 !results/README.md

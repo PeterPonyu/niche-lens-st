@@ -1,0 +1,21 @@
+id: vizgen_ffpe_io_merfish
+name: Vizgen MERFISH FFPE Human Immuno-Oncology (16 samples x 8 tumor types)
+platform: MERFISH
+tissue: human multi-cancer (colon/liver/melanoma/ovarian/prostate/lung/breast/uterine)
+issues: [47]
+url_status: gated
+page_url: "https://vizgen.com/human-ffpe-immunooncology-release-roadmap/"
+direct_url: null
+reader: squidpy.read.vizgen
+citation_key: vizgen_ffpe_io_2022
+size: 500-plex; ~9M cells; 16 samples x 8 tumor types
+raw_count_artifact: cell_by_gene.csv raw counts, 500-plex, ~9M cells + cell_metadata.csv centroids
+raw_count_policy: raw integer count matrix + spatial metadata only; no FASTQ / WSI / normalized-only objects
+contract:
+  X: cell_by_gene.csv — raw integer cell x gene counts (float32 on load)
+  coords: cell_metadata.csv centroids (center_x/center_y, optional z) (float32)
+  section_id: per-slice / per-section integer codes (e.g. Bregma / brain_section_label)
+  edges: build_graph(coords, section_id, k, 'knn') int64; no cross-section edges
+  labels: obs cell-class labels where shipped (optional)
+  transcripts: detected_transcripts.csv (where shipped)
+notes: "Vizgen Data Release Program (registration), like #41. No anonymous hotlink -- resolve per-sample URLs from the portal."

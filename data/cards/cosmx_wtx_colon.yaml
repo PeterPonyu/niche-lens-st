@@ -1,0 +1,21 @@
+id: cosmx_wtx_colon
+name: CosMx Human Whole Transcriptome (WTx) Colon (sigmoid adenocarcinoma)
+platform: CosMx SMI
+tissue: sigmoid colon adenocarcinoma (Stage IVA)
+issues: [49]
+url_status: gated
+page_url: "https://www.brukerspatialbiology.com/products/cosmx-spatial-molecular-imager/ffpe-dataset/cosmx-human-whole-transcriptome-colon-dataset/"
+direct_url: null
+reader: squidpy.read.nanostring
+citation_key: cosmx_wtx_18933plex_2024
+size: ~18,933-plex; multi-GB (size not printed on gated page)
+raw_count_artifact: exprMat_file.csv raw counts, ~18,933-plex (WTx) + polygons + tx
+raw_count_policy: raw integer count matrix + spatial metadata only; no FASTQ / WSI / normalized-only objects
+contract:
+  X: "*_exprMat_file.csv — raw integer cell x gene counts (float32 on load)"
+  coords: "*_metadata_file.csv CenterX/Y_global_px centroids (float32)"
+  section_id: obs['fov'] per-FOV integer codes; graph must never bridge FOVs
+  edges: build_graph(coords, section_id, k, 'knn') int64; no cross-FOV edges
+  labels: derived annotation (optional)
+  transcripts: "*_tx_file.csv transcript locations + per-cell polygon files"
+notes: "Upgrades #39/#40: ~3x plex over CosMx Brain, ~20x over NSCLC. Form-gated (registration) at brukerspatialbiology.com -- same access pattern as #40."

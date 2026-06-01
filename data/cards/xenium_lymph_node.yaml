@@ -1,0 +1,21 @@
+id: xenium_lymph_node
+name: Xenium Human Lymph Node (Multi-Tissue & Cancer panel preview)
+platform: Xenium
+tissue: lymph node (immune / lymphoid)
+issues: [45]
+url_status: verified_page
+page_url: "https://www.10xgenomics.com/datasets/human-lymph-node-preview-data-xenium-human-multi-tissue-and-cancer-panel-1-standard"
+direct_url: null
+reader: squidpy.read.xenium
+citation_key: tenx_xenium_lymph_node_2023
+size: 377-plex; 377,985 cells
+raw_count_artifact: cell_feature_matrix.h5 raw counts, 377-plex, 377,985 cells
+raw_count_policy: raw integer count matrix + spatial metadata only; no FASTQ / WSI / normalized-only objects
+contract:
+  X: cell_feature_matrix.h5 / .zarr.zip — raw integer cell x gene counts (float32 on load)
+  coords: cells.parquet / cell_boundaries.parquet segmentation centroids (float32)
+  section_id: per-region / per-sample integer codes (multi-region -> distinct sections)
+  edges: build_graph(coords, section_id, k, 'knn') int64; no cross-section edges
+  labels: derived cluster / annotation (optional, for prototype evaluation)
+  transcripts: transcripts.parquet transcript coordinates (QC / sub-cellular)
+notes: Healthy lymphoid organ -> germinal-centre/T-zone/B-follicle niches (immune axis). CC BY 4.0. Direct .h5 hotlink UNVERIFIED -- resolve from page.

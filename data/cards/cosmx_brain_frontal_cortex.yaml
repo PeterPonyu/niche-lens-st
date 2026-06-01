@@ -1,0 +1,21 @@
+id: cosmx_brain_frontal_cortex
+name: CosMx Human Brain (Frontal Cortex, WTx)
+platform: CosMx SMI
+tissue: frontal cortex FFPE
+issues: [40]
+url_status: gated
+page_url: "https://www.brukerspatialbiology.com/"
+direct_url: null
+reader: squidpy.read.nanostring
+citation_key: bruker_cosmx_brain_2024
+size: 6,078-plex; ~194k cells; ~3 GB
+raw_count_artifact: exprMat raw counts, 6,078-plex (WTx), ~194k cells
+raw_count_policy: raw integer count matrix + spatial metadata only; no FASTQ / WSI / normalized-only objects
+contract:
+  X: "*_exprMat_file.csv — raw integer cell x gene counts (float32 on load)"
+  coords: "*_metadata_file.csv CenterX/Y_global_px centroids (float32)"
+  section_id: obs['fov'] per-FOV integer codes; graph must never bridge FOVs
+  edges: build_graph(coords, section_id, k, 'knn') int64; no cross-FOV edges
+  labels: derived annotation (optional)
+  transcripts: "*_tx_file.csv transcript locations + per-cell polygon files"
+notes: Form-gated (name/email) at brukerspatialbiology.com; no anonymous URL. Download manually, then point the reader at the extracted directory.

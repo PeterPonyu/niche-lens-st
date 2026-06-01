@@ -1,0 +1,21 @@
+id: gse208253_oscc_visium
+name: GSE208253 OSCC Visium
+platform: Visium v1
+tissue: HPV-neg OSCC
+issues: [42]
+url_status: verified_direct
+page_url: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE208253"
+direct_url: "https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE208253&format=file"
+reader: scanpy.read_visium / scanpy.read_10x_mtx
+citation_key: gse208253_oscc_visium
+size: ~18k genes; ~2.5k spots; 12 slides; 153.4 MB
+raw_count_artifact: 12x filtered_feature_bc_matrix.h5 raw SPOT counts (RAW.tar 153 MB)
+raw_count_policy: raw integer count matrix + spatial metadata only; no FASTQ / WSI / normalized-only objects (SPOT resolution -- no cell boundaries)
+contract:
+  X: filtered_feature_bc_matrix.h5 — raw integer SPOT x gene counts (float32 on load)
+  coords: tissue_positions_list.csv spot centers (float32) -- NOT cell boundaries
+  section_id: per-slide integer codes
+  edges: build_graph(coords, section_id, k, 'knn') int64; per-slide only
+  labels: n/a (spot resolution)
+  transcripts: n/a -- spot resolution carries no transcript coordinates
+notes: Spot resolution, NOT single-cell -- no cell boundaries. Use ONLY as a 12-section cross-platform robustness check; each node is a spot, never a cell. direct_url is the GEO supplementary RAW.tar.
