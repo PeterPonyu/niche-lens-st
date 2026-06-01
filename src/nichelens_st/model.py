@@ -67,6 +67,11 @@ class NicheModelConfig:
     kmeans_iters: int = 50
     marker_top_k: int = 5  # per-prototype markers reported on the result (#82).
     seed: int = 0
+    # Determinism / device controls threaded into the encoder. Defaults reproduce
+    # today's bit-reproducible behavior; the real-data runner relaxes them.
+    num_threads: int = 1
+    device: str = "cpu"
+    deterministic: bool = True
 
     def encoder_config(self) -> EncoderConfig:
         return EncoderConfig(
@@ -79,6 +84,9 @@ class NicheModelConfig:
             feat_drop=self.feat_drop,
             edge_drop=self.edge_drop,
             seed=self.seed,
+            num_threads=self.num_threads,
+            device=self.device,
+            deterministic=self.deterministic,
         )
 
 

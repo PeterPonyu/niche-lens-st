@@ -214,6 +214,12 @@ class EncoderConfig:
     feat_drop: float = 0.2
     edge_drop: float = 0.2
     seed: int = 0
+    # Determinism / device controls. Defaults reproduce today's bit-reproducible
+    # behavior (single-threaded, deterministic, CPU); the real-data runner relaxes
+    # these to make large graphs feasible (see scripts/run_real_niche.py).
+    num_threads: int = 1
+    device: str = "cpu"
+    deterministic: bool = True
 
 
 def train_embeddings(
@@ -237,10 +243,10 @@ def train_embeddings(
     # same seed. This makes both H and prototype_id reproducible.
     torch.manual_seed(config.seed)
     _prev_det = torch.are_deterministic_algorithms_enabled()
-    torch.use_deterministic_algorithms(True)
+    torch.use_deterministic_algorithms(config.deterministic)
     _prev_threads = torch.get_num_threads()
-    torch.set_num_threads(1)
-    device = torch.device("cpu")
+    torch.set_num_threads(config.num_threads)
+    device = torch.device(config.device)
 
     try:
         x = torch.from_numpy(np.ascontiguousarray(X, dtype=np.float32)).to(device)
