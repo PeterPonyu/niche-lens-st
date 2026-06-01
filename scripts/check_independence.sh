@@ -4,12 +4,21 @@
 set -euo pipefail
 
 PATTERN='lumina-?st|aether-?3d|FactorGraph|factorgraph'
+# ``src/nichelens_st/results_contract.py`` is the VENDORED canonical
+# cross-project results contract (byte-identical to the parent orchestration
+# repo's ``scripts/contract/results_contract.py``; enforced by
+# ``tests/test_contract_schema.py``). It legitimately enumerates the four
+# sibling projects (lumina-st, aether-3d, factorgraph-st, niche-lens-st) and
+# MUST NOT be edited to remove them, so it is excluded from the cross-brand
+# scan exactly like this guard script excludes itself.
 HITS=$(grep -rilE "$PATTERN" . \
     --exclude-dir=.git \
     --exclude-dir=.omc \
     --exclude-dir=baseline_repos \
     --exclude-dir=.venv \
-    --exclude='check_independence.sh' 2>/dev/null || true)
+    --exclude-dir=__pycache__ \
+    --exclude='check_independence.sh' \
+    --exclude='results_contract.py' 2>/dev/null || true)
 
 if [ -n "$HITS" ]; then
     echo "FAIL: cross-brand references found in:" >&2

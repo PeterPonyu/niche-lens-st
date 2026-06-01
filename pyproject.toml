@@ -29,6 +29,10 @@ model = ["torch>=2,<3"]
 # is what makes the documented data workflow runnable. anndata pin follows
 # docs/ENV_AND_SMOKE_TEST.md.
 data = ["squidpy>=1.6,<2", "scanpy>=1.10,<2", "anndata>=0.10,<1", "h5py>=3,<4"]
+# Optional real-data extra: loaders for on-disk AnnData (used by
+# scripts/run_real_niche.py). The base package stays numpy/scipy-only; scanpy
+# and anndata are required only to run the real-data path standalone.
+real-data = ["scanpy>=1.10", "anndata>=0.10"]
 
 [project.urls]
 Homepage = "https://github.com/PeterPonyu/niche-lens-st"
