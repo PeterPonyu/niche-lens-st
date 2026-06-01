@@ -36,11 +36,12 @@ plus k-means initialization), so a fixed seed yields identical ``prototype_id``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
 from nichelens_st.encoder import TORCH_AVAILABLE, EncoderConfig, train_embeddings
+from nichelens_st.schemas import validate_inputs
 
 __all__ = [
     "TORCH_AVAILABLE",
@@ -64,7 +65,13 @@ class NicheModelConfig:
     edge_drop: float = 0.2
     n_prototypes: int = 10
     kmeans_iters: int = 50
+    marker_top_k: int = 5  # per-prototype markers reported on the result (#82).
     seed: int = 0
+    # Determinism / device controls threaded into the encoder. Defaults reproduce
+    # today's bit-reproducible behavior; the real-data runner relaxes them.
+    num_threads: int = 1
+    device: str = "cpu"
+    deterministic: bool = True
 
     def encoder_config(self) -> EncoderConfig:
         return EncoderConfig(
@@ -77,6 +84,9 @@ class NicheModelConfig:
             feat_drop=self.feat_drop,
             edge_drop=self.edge_drop,
             seed=self.seed,
+            num_threads=self.num_threads,
+            device=self.device,
+            deterministic=self.deterministic,
         )
 
 
@@ -87,25 +97,34 @@ class NicheModelResult:
     H: np.ndarray            # (n_cells, d) float32
     prototype_id: np.ndarray  # (n_cells,) int64 non-negative
     proto_kind: list[str]     # per-prototype tag in {conserved, sample_specific}
+    # Per-prototype top-k gene indices by mean X (issue #82). Empty by
+    # default for back-compat with callers that build the result directly.
+    marker_table: list[list[int]] = field(default_factory=list)
 
 
-def _kmeans(
-    H: np.ndarray, n_clusters: int, n_iters: int, seed: int
-) -> np.ndarray:
-    """Deterministic Lloyd's k-means returning int64 cluster ids in ``[0, k)``.
+def _unit_rows(M: np.ndarray) -> np.ndarray:
+    """Project rows back onto the unit sphere (rows with ~0 norm stay near 0)."""
+    norms = np.linalg.norm(M, axis=1, keepdims=True)
+    return M / np.maximum(norms, 1e-12)
 
-    Uses k-means++ seeding with a fixed ``numpy`` generator so a given seed and
-    embedding matrix always reproduce the same assignment. Cluster ids are
-    relabeled to a contiguous, content-defined order (by first appearance over
-    sorted centroids) so the catalog is stable.
+
+def _spherical_kmeans(
+    Hd: np.ndarray, k: int, n_iters: int, rng: np.random.Generator
+) -> tuple[np.ndarray, np.ndarray]:
+    """Lloyd's k-means specialized for L2-normalized (unit-sphere) embeddings.
+
+    The encoder is trained on a cosine objective and emits unit-norm rows, so
+    cluster assignment must use cosine geometry. Centroids are renormalized onto
+    the unit sphere after every mean update (spherical k-means): on the sphere
+    squared-Euclidean nearest-centroid then agrees with cosine nearest-centroid.
+    Without renormalization the mean of unit vectors has norm < 1 and drifts
+    inside the ball, so Euclidean assignment no longer matches cosine. Returns
+    ``(labels, centers)`` with ``centers`` on the unit sphere.
     """
-    n = H.shape[0]
-    k = min(n_clusters, n)
-    rng = np.random.default_rng(seed)
+    n = Hd.shape[0]
 
-    # k-means++ initialization.
-    centers = np.empty((k, H.shape[1]), dtype=np.float64)
-    Hd = H.astype(np.float64, copy=False)
+    # k-means++ initialization (seeds are sampled unit-norm rows).
+    centers = np.empty((k, Hd.shape[1]), dtype=np.float64)
     first = int(rng.integers(n))
     centers[0] = Hd[first]
     closest_sq = np.sum((Hd - centers[0]) ** 2, axis=1)
@@ -121,7 +140,7 @@ def _kmeans(
 
     labels = np.zeros(n, dtype=np.int64)
     for _ in range(n_iters):
-        # Assign.
+        # Assign (Euclidean nearest == cosine nearest while centers are unit).
         dists = np.sum(
             (Hd[:, None, :] - centers[None, :, :]) ** 2, axis=2
         )
@@ -130,11 +149,32 @@ def _kmeans(
             labels = new_labels
             break
         labels = new_labels
-        # Update.
+        # Update centroids, then renormalize back onto the unit sphere.
         for c in range(k):
             members = Hd[labels == c]
             if members.size:
                 centers[c] = members.mean(axis=0)
+        centers = _unit_rows(centers)
+
+    return labels, centers
+
+
+def _kmeans(
+    H: np.ndarray, n_clusters: int, n_iters: int, seed: int
+) -> np.ndarray:
+    """Deterministic spherical k-means returning int64 cluster ids in ``[0, k)``.
+
+    Uses k-means++ seeding with a fixed ``numpy`` generator so a given seed and
+    embedding matrix always reproduce the same assignment. Cluster ids are
+    relabeled to a contiguous, content-defined order (by first appearance over
+    sorted centroids) so the catalog is stable.
+    """
+    n = H.shape[0]
+    k = min(n_clusters, n)
+    rng = np.random.default_rng(seed)
+    Hd = H.astype(np.float64, copy=False)
+
+    labels, _ = _spherical_kmeans(Hd, k, n_iters, rng)
 
     # Relabel to contiguous ids in order of first appearance for stability.
     _, first_idx = np.unique(labels, return_index=True)
@@ -150,8 +190,15 @@ def _separation_head(
 
     Conserved iff the prototype's assigned cells span every section; otherwise
     sample_specific. Mirrors the synthetic ground-truth definition.
+
+    With a single section the conserved/sample_specific distinction is
+    undefined (``seen == all_sections`` is trivially true for every populated
+    prototype), so we tag everything ``"unknown"`` to surface the degeneracy
+    instead of confidently asserting all-conserved (issue #85).
     """
     all_sections = set(np.asarray(section_id).tolist())
+    if len(all_sections) < 2:
+        return ["unknown"] * n_protos
     kinds: list[str] = []
     for p in range(n_protos):
         seen = set(section_id[prototype_id == p].tolist())
@@ -160,6 +207,26 @@ def _separation_head(
         else:
             kinds.append("sample_specific")
     return kinds
+
+
+def _compute_marker_table(
+    X: np.ndarray, prototype_id: np.ndarray, n_protos: int, top_k: int
+) -> list[list[int]]:
+    """Per-prototype top-``top_k`` gene indices ranked by mean X (issue #82)."""
+    if top_k < 1:
+        raise ValueError(f"marker_top_k must be >= 1; got {top_k}")
+    Xa = np.asarray(X)
+    n_genes = Xa.shape[1] if Xa.ndim == 2 else 0
+    k = min(top_k, n_genes)
+    table: list[list[int]] = []
+    for p in range(n_protos):
+        members = Xa[prototype_id == p]
+        if members.size == 0 or k == 0:
+            table.append([])
+            continue
+        order = np.argsort(-members.mean(axis=0), kind="stable")[:k]
+        table.append([int(g) for g in order])
+    return table
 
 
 def fit_niche_model(
@@ -178,13 +245,28 @@ def fit_niche_model(
 
     Raises ``ImportError`` (with install guidance) if the optional ``[model]``
     extra / torch is not installed.
+
+    Determinism contract
+    --------------------
+    The whole path is reproducible from ``config.seed`` alone:
+
+    1. **Encoder** (``train_embeddings``) seeds torch and enables deterministic
+       algorithms, so ``H`` is bitwise-reproducible on CPU.
+    2. **k-means** (``_kmeans``) draws its k-means++ init from a *local*
+       ``np.random.default_rng(seed)`` -- it does not touch global ``np.random``
+       state, so a fixed seed and ``H`` always yield the same ``prototype_id``.
+    3. **Separation head** and **marker table** are pure deterministic reductions
+       (set membership / stable ``argsort``).
+
+    Hence two runs with the same seed produce identical ``prototype_id``,
+    ``proto_kind`` and ``marker_table``.
     """
     cfg = config or NicheModelConfig()
+    # Validate the full input contract up front so callers get a clear
+    # SchemaError (out-of-range / cross-section edges, non-float32 X, etc.)
+    # instead of a deep torch IndexError from index_add_ (issue #62).
+    validate_inputs(X, coords, section_id, edges)
     section_id = np.asarray(section_id)
-    if section_id.ndim != 1 or section_id.shape[0] != X.shape[0]:
-        raise ValueError(
-            f"section_id must be (n_cells,); got shape={section_id.shape}"
-        )
 
     # 1) Contrastive niche embeddings (torch; gated).
     H = train_embeddings(X, edges, cfg.encoder_config())
@@ -196,4 +278,12 @@ def fit_niche_model(
     # 3) Separation head: conserved vs sample_specific by cross-section presence.
     proto_kind = _separation_head(prototype_id, section_id, n_protos)
 
-    return NicheModelResult(H=H, prototype_id=prototype_id, proto_kind=proto_kind)
+    # 4) Per-prototype marker table (issue #82).
+    marker_table = _compute_marker_table(X, prototype_id, n_protos, cfg.marker_top_k)
+
+    return NicheModelResult(
+        H=H,
+        prototype_id=prototype_id,
+        proto_kind=proto_kind,
+        marker_table=marker_table,
+    )

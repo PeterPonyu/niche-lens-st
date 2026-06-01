@@ -87,6 +87,17 @@ def _undirected_edge_index(edges: np.ndarray) -> "Tensor":
 
 if TORCH_AVAILABLE:
 
+    def _l2_normalize(h: "Tensor") -> "Tensor":
+        """L2-normalize rows onto the unit sphere with a float32-safe ``eps``.
+
+        torch's default ``eps=1e-12`` is far below the smallest meaningful
+        float32 norm. For a near-zero-norm row (e.g. an isolated node with
+        zero/dropped features), dividing by a tiny norm amplifies it into a
+        noise-dominated unit vector that then dominates the InfoNCE similarity
+        matrix. ``eps=1e-6`` keeps such degenerate rows bounded.
+        """
+        return torch.nn.functional.normalize(h, dim=1, eps=1e-6)
+
     class _MeanAggLayer(nn.Module):
         """One GraphSAGE-mean message-passing layer using scatter add."""
 
@@ -135,7 +146,7 @@ if TORCH_AVAILABLE:
                 h = layer(h, edge_index, n_nodes)
                 if i < len(self.layers) - 1:
                     h = self.act(h)
-            return torch.nn.functional.normalize(h, dim=1)
+            return _l2_normalize(h)
 
 
 def _augment(
@@ -162,11 +173,26 @@ def _augment(
     return x_aug, edge_aug
 
 
+_INFO_NCE_TAU_MIN: float = 1e-4
+"""Lower bound for InfoNCE ``tau`` (issue #88). Below this value
+``z @ z.t() / tau`` overflows float32 and softmax in cross-entropy
+degenerates to NaN. ``train_embeddings`` rejects ``tau <= 0`` with a
+``ValueError``; this constant bounds the positive range against silent
+underflow corruption."""
+
+
 def _info_nce(z1: "Tensor", z2: "Tensor", tau: float) -> "Tensor":
-    """NT-Xent / InfoNCE loss over two aligned views of the same nodes."""
+    """NT-Xent / InfoNCE loss over two aligned views of the same nodes.
+
+    ``tau`` is clamped to ``[_INFO_NCE_TAU_MIN, +inf)`` so a tiny user
+    setting cannot make ``sim = z @ z.t() / tau`` overflow float32 and
+    NaN-out the softmax/cross-entropy. ``tau <= 0`` is rejected upstream
+    in :func:`train_embeddings` (issue #88).
+    """
+    safe_tau = max(float(tau), _INFO_NCE_TAU_MIN)
     n = z1.shape[0]
     z = torch.cat([z1, z2], dim=0)  # (2n, d), already L2-normalized
-    sim = z @ z.t() / tau
+    sim = z @ z.t() / safe_tau
     # Mask self-similarity.
     diag = torch.eye(2 * n, dtype=torch.bool, device=z.device)
     sim = sim.masked_fill(diag, float("-inf"))
@@ -188,6 +214,12 @@ class EncoderConfig:
     feat_drop: float = 0.2
     edge_drop: float = 0.2
     seed: int = 0
+    # Determinism / device controls. Defaults reproduce today's bit-reproducible
+    # behavior (single-threaded, deterministic, CPU); the real-data runner relaxes
+    # these to make large graphs feasible (see scripts/run_real_niche.py).
+    num_threads: int = 1
+    device: str = "cpu"
+    deterministic: bool = True
 
 
 def train_embeddings(
@@ -203,16 +235,18 @@ def train_embeddings(
     _require_torch()
     if X.ndim != 2:
         raise ValueError(f"X must be 2D; got ndim={X.ndim}")
+    if not config.tau > 0:
+        raise ValueError(f"tau must be > 0; got {config.tau}")
 
     # Bit-reproducible training: single-threaded CPU + deterministic reductions
     # so ``index_add_`` (scatter) yields identical results across runs of the
     # same seed. This makes both H and prototype_id reproducible.
     torch.manual_seed(config.seed)
     _prev_det = torch.are_deterministic_algorithms_enabled()
-    torch.use_deterministic_algorithms(True)
+    torch.use_deterministic_algorithms(config.deterministic)
     _prev_threads = torch.get_num_threads()
-    torch.set_num_threads(1)
-    device = torch.device("cpu")
+    torch.set_num_threads(config.num_threads)
+    device = torch.device(config.device)
 
     try:
         x = torch.from_numpy(np.ascontiguousarray(X, dtype=np.float32)).to(device)

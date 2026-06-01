@@ -13,7 +13,9 @@ authors = [{ name = "PeterPonyu", email = "fuzeyu09@gmail.com" }]
 dependencies = ["numpy>=1.26,<3", "scipy>=1.11,<2"]
 
 [project.optional-dependencies]
-test = ["pytest>=8,<9"]
+# `tomllib` is stdlib only on Python >= 3.11; the packaging-contract tests
+# read pyproject.toml, so pull in `tomli` as a backport on 3.10.
+test = ["pytest>=8,<9", "tomli>=2,<3; python_version < '3.11'"]
 # Optional deep-learning extra for the contrastive niche encoder
 # (nichelens_st.model / nichelens_st.encoder). The base package stays
 # dependency-light (numpy/scipy) and imports without torch; the encoder import
@@ -21,6 +23,16 @@ test = ["pytest>=8,<9"]
 # torch-geometric / jax are intentionally NOT used: message passing is
 # expressed with plain-torch scatter (index_add_) over the subgraph edge lists.
 model = ["torch>=2,<3"]
+# Optional data-ingestion extra for the dataset loaders / contract builder /
+# CCC helpers. Those paths import squidpy/scanpy (with anndata + h5py for IO);
+# the base package stays dependency-light, so installing ``nichelens-st[data]``
+# is what makes the documented data workflow runnable. anndata pin follows
+# docs/ENV_AND_SMOKE_TEST.md.
+data = ["squidpy>=1.6,<2", "scanpy>=1.10,<2", "anndata>=0.10,<1", "h5py>=3,<4"]
+# Optional real-data extra: loaders for on-disk AnnData (used by
+# scripts/run_real_niche.py). The base package stays numpy/scipy-only; scanpy
+# and anndata are required only to run the real-data path standalone.
+real-data = ["scanpy>=1.10", "anndata>=0.10"]
 
 [project.urls]
 Homepage = "https://github.com/PeterPonyu/niche-lens-st"
@@ -28,6 +40,19 @@ Homepage = "https://github.com/PeterPonyu/niche-lens-st"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# Ruff's default rule set (pyflakes + a curated pycodestyle subset). Kept
+# explicit so the CI lint gate is reproducible across ruff versions.
+select = ["E4", "E7", "E9", "F"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# src-layout: make `python -m pytest` work on a fresh checkout without
+# requiring `pip install -e .` first (issue #79). pytest >= 8 (declared
+# above) honors `pythonpath` natively.
+pythonpath = ["src"]
