@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
 from typing import Iterable
 
 import numpy as np
@@ -35,6 +34,8 @@ def build_graph(
         raise GraphError(f"coords must be (n_cells, 2) or (n_cells, 3); got {coords.shape}")
     if section_id.ndim != 1 or section_id.shape[0] != coords.shape[0]:
         raise GraphError(f"section_id must be (n_cells,); got {section_id.shape}")
+    if not np.isfinite(coords).all():
+        raise GraphError("coords contains NaN or Inf")
     if coords.shape[0] == 0 or k == 0:
         return np.zeros((2, 0), dtype=np.int64)
 
@@ -52,12 +53,24 @@ def build_graph(
         if k_eff <= 0:
             continue
         pts = coords[idx]
+        # Query k_eff+1 neighbors so we can drop the self-row even when
+        # coincident/tied coordinates push self off column 0 (issue #60).
         _dist, nn_local = cKDTree(pts).query(pts, k=k_eff + 1)
         nn_local = np.asarray(nn_local)
         if nn_local.ndim == 1:
             nn_local = nn_local[:, None]
-        nn_local = nn_local[:, 1 : k_eff + 1]
-        rows = np.repeat(np.arange(m), k_eff)
+        # Per-row mask: drop the first occurrence of the row's own index,
+        # then take the first k_eff survivors. Positional slicing
+        # (nn_local[:, 1:]) is only correct when column 0 is guaranteed
+        # to be self; cKDTree breaks that with coincident coords.
+        row_idx = np.arange(m)
+        self_mask = nn_local == row_idx[:, None]
+        # argmax returns the first True per row; if no True, drops first col.
+        first_self = np.where(self_mask.any(axis=1), self_mask.argmax(axis=1), 0)
+        keep = np.ones_like(nn_local, dtype=bool)
+        keep[row_idx, first_self] = False
+        nn_local = nn_local[keep].reshape(m, k_eff + 1 - 1)[:, :k_eff]
+        rows = np.repeat(row_idx, k_eff)
         cols = nn_local.reshape(-1)
         src_chunks.append(idx[rows])
         dst_chunks.append(idx[cols])
@@ -65,14 +78,6 @@ def build_graph(
     if not src_chunks:
         return np.zeros((2, 0), dtype=np.int64)
     return np.stack([np.concatenate(src_chunks), np.concatenate(dst_chunks)]).astype(np.int64)
-
-
-@dataclass(frozen=True)
-class Subgraph:
-    """A cell-centered induced subgraph using original node identifiers."""
-
-    node_ids: np.ndarray
-    edges: np.ndarray
 
 
 def _adjacency(edges: np.ndarray) -> dict[int, set[int]]:

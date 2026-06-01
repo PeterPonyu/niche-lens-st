@@ -82,8 +82,8 @@ Per-dataset specifics live in `data/cards/<dataset_id>.yaml`
 | 15 | GSE208253 (OSCC Visium) | GEO `GSE208253` | Visium v1 | HPV-neg OSCC | ~18k genes · ~2.5k spots · 12 slides · 153.4 MB | ✅ `ncbi.nlm.nih.gov/geo` (`GSE208253_RAW.tar`) | ⚠️ **spot resolution, not single-cell — no cell boundaries.** Use as a 12-section cross-platform robustness check; each node is a spot, not a cell. |
 | 18 | GSE293199 (TNBC Xenium) | GEO `GSE293199` | Xenium | TNBC | 280-panel · ~160k cells · 13.6 GB full `RAW.tar` (subset ~3 GB) | ✅ `ncbi.nlm.nih.gov/geo` (OmiCLIP source) | Single-cell Xenium with boundaries/transcripts; TNBC tumor-immune niches; start from the ~3 GB subset. |
 
-> **Also tagged for NicheLens-ST in the registry (multi-platform, shared with
-> factorgraph-st):** Cervilla 2026 Xenium & CosMx (Zenodo **17986017**, ✅) and
+> **Also tagged for NicheLens-ST in the registry (multi-platform):** Cervilla
+> 2026 Xenium & CosMx (Zenodo **17986017**, ✅) and
 > XeniumMT & 5K (Zenodo **18000256**, ✅). Not in the first-pull set below; pull
 > on demand if a matched multi-platform niche cohort is needed.
 

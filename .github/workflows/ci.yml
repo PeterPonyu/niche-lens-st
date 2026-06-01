@@ -20,15 +20,33 @@ jobs:
       - name: Brand / leakage scan (incl. cffconvert --validate)
         run: bash scripts/check_independence.sh
 
-  tests:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Install ruff
+        run: python -m pip install --upgrade pip ruff
+      - name: Ruff lint (config in pyproject.toml)
+        run: ruff check .
+
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Exercise the full declared range (requires-python = ">=3.10").
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
 
       - name: Install package if pyproject.toml exists
         run: |
