@@ -30,6 +30,13 @@ if str(_SCRIPTS) not in sys.path:
 # ---------------------------------------------------------------------------
 # Import the module under test
 # ---------------------------------------------------------------------------
+# plot_niche_results.py imports matplotlib at module load (to pin the Agg
+# backend), so loading it requires the optional [viz] extra. Skip the whole
+# smoke module when matplotlib is absent -- mirroring the importorskip("yaml")
+# and torch/squidpy guards elsewhere -- so CI lanes that install only
+# [model,test] collect cleanly instead of erroring at import time.
+pytest.importorskip("matplotlib")
+
 _spec = importlib.util.spec_from_file_location(
     "plot_niche_results", _SCRIPTS / "plot_niche_results.py"
 )
