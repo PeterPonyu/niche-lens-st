@@ -235,6 +235,7 @@ def _info_nce_minibatch(
     tau: float,
     batch_size: int,
     generator: "torch.Generator",
+    labels: "Tensor | None" = None,
 ) -> "Tensor":
     """Minibatched NT-Xent / InfoNCE that never builds the full ``(2n, 2n)``.
 
@@ -267,9 +268,14 @@ def _info_nce_minibatch(
     b = int(batch_size)
     if b <= 0 or b >= n:
         # Degenerate to the exact full-batch loss (single block covers all).
-        return _info_nce(z1, z2, tau)
+        return _info_nce(z1, z2, tau, labels)
 
     perm = torch.randperm(n, generator=generator, device=z1.device)
+    lab_full = (
+        torch.as_tensor(labels, device=z1.device).reshape(-1)
+        if labels is not None
+        else None
+    )
     total = z1.new_zeros(())
     n_blocks = 0
     for start in range(0, n, b):
@@ -287,6 +293,15 @@ def _info_nce_minibatch(
                 torch.arange(0, m, device=zb.device),
             ]
         )
+        if lab_full is not None:
+            # Same-group negative masking (#92/#103), restricted to this
+            # minibatch's labels (keeping each anchor's positive twin).
+            lab_b = lab_full[idx]
+            lab2 = torch.cat([lab_b, lab_b])
+            same = lab2.unsqueeze(0) == lab2.unsqueeze(1)
+            keep_pos = torch.zeros_like(same)
+            keep_pos[torch.arange(2 * m, device=zb.device), targets] = True
+            sim = sim.masked_fill(same & ~diag & ~keep_pos, float("-inf"))
         total = total + torch.nn.functional.cross_entropy(sim, targets)
         n_blocks += 1
     return total / n_blocks
@@ -382,16 +397,11 @@ def train_embeddings(
             )
             z1 = model(x1, e1)
             z2 = model(x2, e2)
-            # batch_size switch: small data -> full-batch NT-Xent with the
-            # optional group-aware negative masking (#92/#103); large data ->
-            # minibatch NT-Xent (#61/#148, OOM-safe). Masking *within* a
-            # minibatch is a deferred enhancement (see follow-up issue).
-            if config.batch_size > 0:
-                loss = _info_nce_minibatch(
-                    z1, z2, config.tau, config.batch_size, aug_gen
-                )
-            else:
-                loss = _info_nce(z1, z2, config.tau, labels_t)
+            # Minibatch InfoNCE (#61/#148); ``labels_t`` enables the optional
+            # group-aware negative masking (#92/#103) within each minibatch.
+            loss = _info_nce_minibatch(
+                z1, z2, config.tau, config.batch_size, aug_gen, labels_t
+            )
             loss.backward()
             optimizer.step()
 

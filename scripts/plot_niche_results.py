@@ -35,11 +35,34 @@ import argparse
 import sys
 from pathlib import Path
 
-# Non-interactive backend must be set before any matplotlib import.
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402 – must follow backend selection
-import numpy as np  # noqa: E402
+import numpy as np
+
+# matplotlib is an optional viz dependency. Gate it (like the torch/squidpy
+# extras) so importing this module / pytest collection never requires it; a
+# non-interactive backend is selected before pyplot is imported. Public entry
+# points call ``_require_matplotlib`` and raise an actionable message when it is
+# absent.
+try:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt  # noqa: E402
+
+    _MPL_AVAILABLE = True
+except ImportError:  # pragma: no cover - optional viz dep
+    matplotlib = None  # type: ignore[assignment]
+    plt = None  # type: ignore[assignment]
+    _MPL_AVAILABLE = False
+
+_NO_MPL_MSG = (
+    "Rendering niche plots requires matplotlib (optional viz dependency). "
+    "Install it with `pip install matplotlib` (or the project's [viz] extra)."
+)
+
+
+def _require_matplotlib() -> None:
+    if not _MPL_AVAILABLE:
+        raise ImportError(_NO_MPL_MSG)
 
 # Resolve repo root so the script works from any cwd.
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -189,6 +212,7 @@ def plot_niche(
         Keys are absent when the corresponding plot could not be produced (e.g.
         no spatial coords available).
     """
+    _require_matplotlib()
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
