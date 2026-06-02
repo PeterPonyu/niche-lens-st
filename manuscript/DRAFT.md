@@ -6,7 +6,7 @@ NicheLens-ST: contrastive graph learning of conserved and sample-specific cellul
 
 ## Draft abstract
 
-Spatial transcriptomics measures cells within tissue neighborhoods, but many analyses still reduce local organization to per-cell clusters or pairwise proximity summaries. NicheLens-ST is a planned method for learning interpretable cellular niche representations from spatial neighborhood graphs. The proposed model treats each cell-centered neighborhood as a subgraph, learns contrastive embeddings that separate conserved niche prototypes from sample-specific variants, and exposes marker and interaction summaries for downstream review. The first development phase will benchmark against public-code niche and communication references without vendoring third-party implementations. All biological and performance claims remain planned until local implementation, tests, and dataset validation are complete.
+Spatial transcriptomics measures cells within tissue neighborhoods, but many analyses still reduce local organization to per-cell clusters or pairwise proximity summaries. NicheLens-ST is a planned method for learning interpretable cellular niche representations from spatial neighborhood graphs. The proposed model treats each cell-centered neighborhood as a subgraph, learns contrastive embeddings that separate conserved niche prototypes from sample-specific variants, and reports per-prototype marker and interaction summaries. The first development phase will benchmark against public-code niche and communication references without vendoring third-party implementations. All biological and performance claims remain planned until local implementation, tests, and dataset validation are complete.
 
 ## Proposed core contributions
 
