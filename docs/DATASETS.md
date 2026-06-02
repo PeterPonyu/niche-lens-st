@@ -39,6 +39,18 @@ spot is not a cell and carries no boundaries).
 Every dataset below is ingested through the same contract, using the repo's
 **existing** entry points (no new abstractions required):
 
+0. **Install the data extra** — the offline surface (`--list`, `--card`,
+   `--dry-run`) needs nothing beyond the base install, but the `--download` and
+   `--ligrec` paths import squidpy/scanpy, which ship in the optional `[data]`
+   extra (NOT in the base install). Install it first:
+
+   ```bash
+   pip install "nichelens-st[data]"   # or: activate the project's `dl` conda env
+   ```
+
+   When the extra is missing, the fetch/CCC paths raise an actionable
+   `FetchError` naming this command (via `_require_data`) instead of a raw
+   `ModuleNotFoundError` (issue #266).
 1. **Fetch** — register the dataset in `scripts/data/fetch_datasets.py`
    (`DATASETS` dict) and pull it with `--dataset <id> [--download]`. The script
    never fabricates URLs and never writes placeholder bytes; large pulls are
