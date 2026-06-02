@@ -30,6 +30,12 @@ Examples (all offline)::
 A real pull is opt-in and never runs in CI/smoke::
 
     python scripts/data/fetch_datasets.py --dataset gse208253_oscc_visium --download
+
+The ``--download`` / ``--ligrec`` execution paths import squidpy/scanpy, which
+ship in the optional ``[data]`` extra (NOT in the base install). When that extra
+is absent they raise an actionable ``FetchError`` naming
+``pip install "nichelens-st[data]"`` (see ``_require_data``), never a raw
+``ModuleNotFoundError`` (issue #266).
 """
 
 from __future__ import annotations
@@ -56,6 +62,34 @@ CARDS_DIR = REPO_ROOT / "data" / "cards"
 
 class FetchError(RuntimeError):
     """Raised when a dataset cannot be fetched (guarded stub / unverified URL)."""
+
+
+# Optional data-ingestion dependencies (squidpy/scanpy/anndata/h5py) ship in the
+# ``[data]`` extra (see pyproject.toml). The base install
+# (``pip install ".[model,test]"``) intentionally omits them, so the fetch /
+# CCC paths must fail with an actionable message — mirroring the gated
+# ``_NO_TORCH_MSG`` pattern in ``src/nichelens_st/encoder.py`` — rather than a
+# raw ``ModuleNotFoundError``.
+_DATA_EXTRA_MSG = (
+    'install the optional data extra: pip install "nichelens-st[data]" '
+    "(or activate the project's `dl` conda env), then re-run. "
+    "See docs/DATASETS.md."
+)
+
+
+def _require_data(module: str):  # noqa: ANN201 - returns the imported module
+    """Import an optional ``[data]``-extra module or raise an actionable error.
+
+    Wraps the bare ``import`` of squidpy/scanpy/etc. so a missing dependency
+    surfaces as a ``FetchError`` naming the ``[data]`` extra, instead of a raw
+    ``ModuleNotFoundError`` (issue #266).
+    """
+    import importlib
+
+    try:
+        return importlib.import_module(module)
+    except ImportError as exc:  # pragma: no cover - exercised via injected name
+        raise FetchError(f"{module} is required for this path — {_DATA_EXTRA_MSG}") from exc
 
 
 # --------------------------------------------------------------------------- #
@@ -228,13 +262,7 @@ def _download_url(ds: Dataset, url: str, dest: Path) -> Path:
 
 def _load_squidpy_builtin(ds: Dataset, dest: Path) -> Path:
     """Load a squidpy builtin dataset (figshare mirror) and cache it locally."""
-    try:
-        import squidpy as sq  # lazy: not a base dependency
-    except ImportError as exc:  # pragma: no cover - optional heavy dep
-        raise FetchError(
-            f"{ds.id}: loading requires squidpy (optional). "
-            "Install the data extra (squidpy/scanpy) in the `dl` env, then re-run."
-        ) from exc
+    sq = _require_data("squidpy")  # actionable FetchError if the [data] extra is absent
 
     loader_name = ds.reader.rsplit(".", 1)[-1]  # e.g. 'merfish'
     loader = getattr(sq.datasets, loader_name)
@@ -290,13 +318,7 @@ def run_ligrec(adata, cluster_key: str, *, n_perms: int = 100, threshold: float 
     with per-niche ``prototype_id`` from the encoder to build ``interaction_summary``
     (see docs/MVP_DESIGN.md).
     """
-    try:
-        import squidpy as sq  # lazy
-    except ImportError as exc:  # pragma: no cover - optional heavy dep
-        raise FetchError(
-            "ligrec requires squidpy (optional). Install the `dl` env (squidpy "
-            "incl. OmniPath backend), then re-run."
-        ) from exc
+    sq = _require_data("squidpy")  # actionable FetchError if the [data] extra is absent
     return sq.gr.ligrec(
         adata, cluster_key=cluster_key, n_perms=n_perms, threshold=threshold, copy=True, seed=seed
     )
