@@ -4,7 +4,7 @@ Status: spec document. Defines how evidence will be collected. No performance is
 
 ## Generator
 
-Synthetic instances have `K_conserved` niche prototypes shared across all sections and `J_specific` variants present in a subset of sections. When a section has at least as many cells as its allowed prototypes, the generator seeds at least one cell for every allowed prototype before random assignment so conserved prototypes are represented in each section.
+Synthetic instances have `K_conserved` niche prototypes shared across all sections and `J_specific` variants present in a subset of sections. When a section has at least as many cells as its allowed prototypes, the generator seeds at least one cell for every allowed prototype before random assignment so conserved prototypes are represented in each section. Within each section the allowed prototypes are laid out as Voronoi zones around random centres -- each cell takes its nearest centre's prototype -- so niches are spatially contiguous and `prototype_id` has positive spatial autocorrelation over the kNN graph (issue #59).
 
 ### Generator parameters
 
@@ -47,6 +47,7 @@ Synthetic instances have `K_conserved` niche prototypes shared across all sectio
 - `tests/synth/test_generator_determinism.py`
 - `tests/synth/test_niche_recovery_metrics.py`
 - `tests/synth/test_spatial_coherence_metrics.py`
+- `tests/synth/test_spatial_coherence_of_generated_truth.py`
 - `tests/synth/test_proto_kind_metrics.py`
 
 ## Out of scope
