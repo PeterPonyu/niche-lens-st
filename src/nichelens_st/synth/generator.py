@@ -86,6 +86,12 @@ def generate_instance(
     coords = rng.uniform(0.0, 1.0, size=(n_cells, 2)).astype(np.float32)
     section_id = np.repeat(np.arange(n_sections), n_cells_per_section).astype(np.int64)
 
+    # Spatially-structured niche assignment (issue #59). Within each section
+    # every allowed prototype owns a Voronoi zone seeded by a random centre, and
+    # each cell takes the prototype of its nearest centre. This makes niches
+    # spatially contiguous, so the kNN graph carries real niche signal and
+    # ``prototype_id`` has positive spatial autocorrelation -- unlike the former
+    # position-independent ``rng.choice`` assignment, whose Moran's I was ~ 0.
     prototype_id = np.empty(n_cells, dtype=np.int64)
     for s in range(n_sections):
         rows = np.arange(s * n_cells_per_section, (s + 1) * n_cells_per_section)
@@ -93,11 +99,22 @@ def generate_instance(
             allowed = list(range(K_conserved)) + [K_conserved + (s % J_specific)]
         else:
             allowed = list(range(K_conserved))
-        assigned = rng.choice(allowed, size=rows.size).astype(np.int64)
-        if rows.size >= len(allowed):
-            assigned[: len(allowed)] = np.array(allowed, dtype=np.int64)
-            rng.shuffle(assigned)
-        prototype_id[rows] = assigned
+        allowed_arr = np.array(allowed, dtype=np.int64)
+        m = allowed_arr.size
+        sec_coords = coords[rows]
+        centres = rng.uniform(0.0, 1.0, size=(m, 2)).astype(np.float32)
+        # Nearest-centre (Voronoi) assignment -> contiguous niche zones.
+        d2 = ((sec_coords[:, None, :] - centres[None, :, :]) ** 2).sum(axis=2)
+        nearest = d2.argmin(axis=1)
+        # Guarantee every allowed prototype is realised in this section (the
+        # conserved/sample_specific contract needs each conserved prototype in
+        # every section): if a centre claimed no cell, hand it the cell sitting
+        # closest to that centre.
+        if rows.size >= m:
+            for j in range(m):
+                if not np.any(nearest == j):
+                    nearest[int(d2[:, j].argmin())] = j
+        prototype_id[rows] = allowed_arr[nearest]
 
     proto_kind = ["conserved"] * K_conserved + ["sample_specific"] * J_specific
 
