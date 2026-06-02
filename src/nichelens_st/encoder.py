@@ -229,6 +229,69 @@ def _info_nce(
     return torch.nn.functional.cross_entropy(sim, targets)
 
 
+def _info_nce_minibatch(
+    z1: "Tensor",
+    z2: "Tensor",
+    tau: float,
+    batch_size: int,
+    generator: "torch.Generator",
+) -> "Tensor":
+    """Minibatched NT-Xent / InfoNCE that never builds the full ``(2n, 2n)``.
+
+    Approximation (and why it is faithful)
+    ---------------------------------------
+    The full-batch loss in :func:`_info_nce` uses *every* other node in the
+    batch as a negative, which forces a dense ``(2n, 2n)`` similarity matrix
+    -- ``232 GiB`` at ``n=124938`` (issue #148). Here we instead partition the
+    ``n`` anchors into random disjoint minibatches of size ``b = batch_size``
+    and, for each minibatch, compute NT-Xent over just that block's ``2b``
+    augmented views: each anchor's positive is its matched view, and the
+    negatives are the other ``2b - 2`` cells *in the same minibatch*.
+
+    This is exactly the SimCLR / in-batch-negatives objective: NT-Xent has
+    always been defined over a sampled minibatch, not the whole corpus. We are
+    not changing the loss family -- we are restoring its intended minibatch
+    semantics, with ``batch_size`` controlling how many negatives each anchor
+    sees. The only approximation versus the current code is the *negative
+    set size* (``2b - 2`` instead of ``2n - 2``); the per-anchor loss form,
+    temperature, and positive assignment are identical. Peak similarity-matrix
+    memory is ``O(b^2)`` per minibatch, independent of ``n``. Losses are
+    averaged over minibatches so the returned scalar is comparable in scale to
+    the full-batch loss.
+
+    A fresh random permutation (seeded via ``generator``) is drawn every call
+    so, across epochs, every anchor is paired against a changing negative set.
+    """
+    safe_tau = max(float(tau), _INFO_NCE_TAU_MIN)
+    n = z1.shape[0]
+    b = int(batch_size)
+    if b <= 0 or b >= n:
+        # Degenerate to the exact full-batch loss (single block covers all).
+        return _info_nce(z1, z2, tau)
+
+    perm = torch.randperm(n, generator=generator, device=z1.device)
+    total = z1.new_zeros(())
+    n_blocks = 0
+    for start in range(0, n, b):
+        idx = perm[start : start + b]
+        m = idx.shape[0]
+        zb1 = z1[idx]
+        zb2 = z2[idx]
+        zb = torch.cat([zb1, zb2], dim=0)  # (2m, d)
+        sim = zb @ zb.t() / safe_tau  # (2m, 2m) -- O(b^2), not O(n^2)
+        diag = torch.eye(2 * m, dtype=torch.bool, device=zb.device)
+        sim = sim.masked_fill(diag, float("-inf"))
+        targets = torch.cat(
+            [
+                torch.arange(m, 2 * m, device=zb.device),
+                torch.arange(0, m, device=zb.device),
+            ]
+        )
+        total = total + torch.nn.functional.cross_entropy(sim, targets)
+        n_blocks += 1
+    return total / n_blocks
+
+
 @dataclass
 class EncoderConfig:
     embed_dim: int = 32
@@ -240,6 +303,14 @@ class EncoderConfig:
     feat_drop: float = 0.2
     edge_drop: float = 0.2
     seed: int = 0
+    # Minibatch InfoNCE (#61, closes #148). ``batch_size <= 0`` (the default)
+    # or ``>= n_cells`` keeps the exact full-batch NT-Xent loss, so existing
+    # small-scale numerics stay bitwise-identical. A positive ``batch_size``
+    # below the cell count bounds the contrastive similarity matrix to
+    # ``O(batch_size^2)`` instead of ``O(n^2)``, removing the ~232 GiB OOM at
+    # 124k cells. The GNN forward is unchanged (full graph, already linear in
+    # nodes+edges); only the negative set per anchor is sampled.
+    batch_size: int = 0
     # Determinism / device controls. Defaults reproduce today's bit-reproducible
     # behavior (single-threaded, deterministic, CPU); the real-data runner relaxes
     # these to make large graphs feasible (see scripts/run_real_niche.py).
@@ -311,7 +382,21 @@ def train_embeddings(
             )
             z1 = model(x1, e1)
             z2 = model(x2, e2)
-            loss = _info_nce(z1, z2, config.tau, labels_t)
+            # Two composable objectives land here:
+            #   * minibatched NT-Xent (#61, closes #148) bounds the similarity
+            #     matrix to O(batch_size^2) and is taken when a positive
+            #     ``batch_size`` below the cell count is set;
+            #   * full-batch NT-Xent with optional group-aware negative masking
+            #     (#92 / #103) is the default path and threads ``labels_t``.
+            # ``batch_size <= 0`` or ``>= n_cells`` keeps the exact full-batch
+            # loss, so the label-masking feature stays active by default.
+            n_cells = z1.shape[0]
+            if 0 < config.batch_size < n_cells:
+                loss = _info_nce_minibatch(
+                    z1, z2, config.tau, config.batch_size, aug_gen
+                )
+            else:
+                loss = _info_nce(z1, z2, config.tau, labels_t)
             loss.backward()
             optimizer.step()
 

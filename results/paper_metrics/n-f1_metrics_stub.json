@@ -1,0 +1,14 @@
+{
+  "asset_id": "N-F1",
+  "project": "NicheLens-ST",
+  "role": "niche map — spatial co-localisation of cell-type niches overlaid on tissue section",
+  "readiness_status": "planned",
+  "source_metric_reference": "planned",
+  "source_script_reference": "planned",
+  "source_exists": false,
+  "metric_source_exists": false,
+  "artifact_exists": false,
+  "supports_safe_prose": false,
+  "paper_claim_ready": false,
+  "notes": "Stub metric record for reproducibility tracking; not paper-claim-ready until claim ID, benchmark metric artifact, data card, and rendered figure are validated."
+}

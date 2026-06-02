@@ -14,7 +14,7 @@ raw_count_policy: squidpy mirror is normalized; use source raw counts for DL tra
 contract:
   X: cell_by_gene.csv — raw integer cell x gene counts (float32 on load)
   coords: obsm['spatial'] (2D centroids)
-  section_id: factorize(obs['embryo/FOV column']) -> per-embryo/FOV section codes
+  section_id: factorize(obs['embryo']) -> 3 section codes
   edges: build_graph(coords, section_id, k, 'knn') int64; no cross-section edges
   labels: obs['celltype_mapped_refined'] -- niche prototype evaluation
   transcripts: n/a in squidpy mirror
