@@ -72,6 +72,10 @@ class NicheModelConfig:
     num_threads: int = 1
     device: str = "cpu"
     deterministic: bool = True
+    # Minibatch InfoNCE knob (#61). 0 (default) keeps full-batch NT-Xent; a
+    # positive value bounds the contrastive matrix to O(batch^2), enabling
+    # large datasets (124k cells) without the O(n^2) OOM.
+    batch_size: int = 0
 
     def encoder_config(self) -> EncoderConfig:
         return EncoderConfig(
@@ -87,6 +91,7 @@ class NicheModelConfig:
             num_threads=self.num_threads,
             device=self.device,
             deterministic=self.deterministic,
+            batch_size=self.batch_size,
         )
 
 
