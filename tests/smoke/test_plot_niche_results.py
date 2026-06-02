@@ -30,6 +30,11 @@ if str(_SCRIPTS) not in sys.path:
 # ---------------------------------------------------------------------------
 # Import the module under test
 # ---------------------------------------------------------------------------
+# plot_niche_results imports matplotlib at module load (Agg backend). matplotlib
+# is an optional/viz dependency absent from the base CI env, so skip the whole
+# module cleanly when it is unavailable rather than failing collection.
+pytest.importorskip("matplotlib")
+
 _spec = importlib.util.spec_from_file_location(
     "plot_niche_results", _SCRIPTS / "plot_niche_results.py"
 )
