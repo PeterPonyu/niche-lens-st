@@ -75,8 +75,11 @@ def _require_torch() -> None:
 def _undirected_edge_index(edges: np.ndarray) -> "Tensor":
     """Symmetrize a (2, n_edges) int64 COO array into a torch edge index.
 
-    Self-loops are added so isolated/center nodes always aggregate their own
-    feature during message passing.
+    Only symmetrization is performed: every ``(u, v)`` edge gets its reverse
+    ``(v, u)`` so message passing is undirected. No self-loops are added — each
+    node's own feature is preserved downstream by the GraphSAGE-style
+    ``[h ; mean(neighbors)]`` concatenation in ``_MeanAggLayer`` (an isolated
+    node contributes a zero neighbor-mean, keeping only its own ``h``).
     """
     src = edges[0]
     dst = edges[1]
@@ -181,13 +184,25 @@ degenerates to NaN. ``train_embeddings`` rejects ``tau <= 0`` with a
 underflow corruption."""
 
 
-def _info_nce(z1: "Tensor", z2: "Tensor", tau: float) -> "Tensor":
+def _info_nce(
+    z1: "Tensor", z2: "Tensor", tau: float, labels: "Tensor | None" = None
+) -> "Tensor":
     """NT-Xent / InfoNCE loss over two aligned views of the same nodes.
 
     ``tau`` is clamped to ``[_INFO_NCE_TAU_MIN, +inf)`` so a tiny user
     setting cannot make ``sim = z @ z.t() / tau`` overflow float32 and
     NaN-out the softmax/cross-entropy. ``tau <= 0`` is rejected upstream
     in :func:`train_embeddings` (issue #88).
+
+    Optional ``labels`` (length ``n``, one group id per node) enable
+    prototype/group-aware negative masking (issues #92 / #103). Vanilla NT-Xent
+    treats *every* non-twin cell as a negative, so in a niche dataset -- where
+    many cells share a prototype -- a large fraction of the "negatives" are
+    actually same-niche cells the model should pull together. When ``labels`` is
+    given, off-diagonal entries that share the anchor's group (other than the
+    positive twin) are dropped from the softmax denominator, removing this
+    false-negative repulsion. ``labels=None`` (default) reproduces vanilla
+    NT-Xent exactly.
     """
     safe_tau = max(float(tau), _INFO_NCE_TAU_MIN)
     n = z1.shape[0]
@@ -200,6 +215,17 @@ def _info_nce(z1: "Tensor", z2: "Tensor", tau: float) -> "Tensor":
     targets = torch.cat(
         [torch.arange(n, 2 * n, device=z.device), torch.arange(0, n, device=z.device)]
     )
+    if labels is not None:
+        lab = torch.as_tensor(labels, device=z.device).reshape(-1)
+        if lab.shape[0] != n:
+            raise ValueError(f"labels must have length n={n}; got {lab.shape[0]}")
+        lab2 = torch.cat([lab, lab])  # (2n,)
+        same = lab2.unsqueeze(0) == lab2.unsqueeze(1)  # (2n, 2n)
+        # Keep each row's positive twin even though it shares the anchor's label.
+        keep_pos = torch.zeros_like(same)
+        keep_pos[torch.arange(2 * n, device=z.device), targets] = True
+        false_neg = same & ~diag & ~keep_pos
+        sim = sim.masked_fill(false_neg, float("-inf"))
     return torch.nn.functional.cross_entropy(sim, targets)
 
 
@@ -209,6 +235,7 @@ def _info_nce_minibatch(
     tau: float,
     batch_size: int,
     generator: "torch.Generator",
+    labels: "Tensor | None" = None,
 ) -> "Tensor":
     """Minibatched NT-Xent / InfoNCE that never builds the full ``(2n, 2n)``.
 
@@ -241,9 +268,14 @@ def _info_nce_minibatch(
     b = int(batch_size)
     if b <= 0 or b >= n:
         # Degenerate to the exact full-batch loss (single block covers all).
-        return _info_nce(z1, z2, tau)
+        return _info_nce(z1, z2, tau, labels)
 
     perm = torch.randperm(n, generator=generator, device=z1.device)
+    lab_full = (
+        torch.as_tensor(labels, device=z1.device).reshape(-1)
+        if labels is not None
+        else None
+    )
     total = z1.new_zeros(())
     n_blocks = 0
     for start in range(0, n, b):
@@ -261,6 +293,15 @@ def _info_nce_minibatch(
                 torch.arange(0, m, device=zb.device),
             ]
         )
+        if lab_full is not None:
+            # Same-group negative masking (#92/#103), restricted to this
+            # minibatch's labels (keeping each anchor's positive twin).
+            lab_b = lab_full[idx]
+            lab2 = torch.cat([lab_b, lab_b])
+            same = lab2.unsqueeze(0) == lab2.unsqueeze(1)
+            keep_pos = torch.zeros_like(same)
+            keep_pos[torch.arange(2 * m, device=zb.device), targets] = True
+            sim = sim.masked_fill(same & ~diag & ~keep_pos, float("-inf"))
         total = total + torch.nn.functional.cross_entropy(sim, targets)
         n_blocks += 1
     return total / n_blocks
@@ -297,8 +338,15 @@ def train_embeddings(
     X: np.ndarray,
     edges: np.ndarray,
     config: EncoderConfig,
+    labels: np.ndarray | None = None,
 ) -> np.ndarray:
     """Train the contrastive encoder and return float32 niche embeddings ``H``.
+
+    ``labels`` (optional, length ``n``) enables prototype/group-aware negative
+    masking in the InfoNCE loss (issues #92 / #103); ``None`` keeps vanilla
+    NT-Xent. Real unsupervised niche discovery leaves it ``None``; callers with a
+    known grouping (e.g. a semi-supervised setting) can pass it to suppress
+    same-group false negatives.
 
     Determinism: all randomness (parameter init, augmentation, optimizer) is
     seeded from ``config.seed`` on CPU, so a fixed seed yields identical ``H``.
@@ -322,6 +370,11 @@ def train_embeddings(
     try:
         x = torch.from_numpy(np.ascontiguousarray(X, dtype=np.float32)).to(device)
         edge_index = _undirected_edge_index(edges).to(device)
+        labels_t = (
+            torch.from_numpy(np.ascontiguousarray(labels)).to(device)
+            if labels is not None
+            else None
+        )
 
         model = NicheEncoder(
             in_dim=x.shape[1],
@@ -344,9 +397,10 @@ def train_embeddings(
             )
             z1 = model(x1, e1)
             z2 = model(x2, e2)
-            # batch_size <= 0 or >= n_cells -> exact full-batch loss (#61).
+            # Minibatch InfoNCE (#61/#148); ``labels_t`` enables the optional
+            # group-aware negative masking (#92/#103) within each minibatch.
             loss = _info_nce_minibatch(
-                z1, z2, config.tau, config.batch_size, aug_gen
+                z1, z2, config.tau, config.batch_size, aug_gen, labels_t
             )
             loss.backward()
             optimizer.step()

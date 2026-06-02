@@ -2,6 +2,8 @@
 
 NicheLens-ST is an independent spatial-transcriptomics method project for learning interpretable cellular niche and tissue-microenvironment representations from spatial neighborhood graphs.
 
+Contributors: see [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, tests, the independence guard, and the claim-ledger / provenance discipline.
+
 ## Scientific focus
 
 The project centers on a future contrastive graph/subgraph model that represents each local cellular neighborhood as a niche token, separates conserved niche prototypes from sample-specific variants, and exposes interpretable marker and interaction summaries.

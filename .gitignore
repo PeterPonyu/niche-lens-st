@@ -1,9 +1,9 @@
-# Python/cache + build artifacts
-__pycache__/
+# Python/cache + build artifacts (recursive — caches can appear in subdirs)
+**/__pycache__/
 *.py[cod]
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
 *.egg-info/
 build/
 dist/
@@ -15,8 +15,19 @@ dist/
 baseline_repos/*
 !baseline_repos/README.md
 
-# OMC runtime state (created if tooling is invoked with this repo as cwd)
-.omc/
+# OMC runtime state (recursive — created in subdirs during local testing/audits)
+**/.omc/
+
+# Editor / OS files
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Dataset cache (written by scripts/data/fetch_datasets.py) — only data/cards/ is tracked
+data/raw/
+data/processed/
+data/cache/
 
 # Dataset cache (written by scripts/data/fetch_datasets.py) — only data/cards/ is tracked
 data/raw/
