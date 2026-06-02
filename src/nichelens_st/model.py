@@ -72,6 +72,11 @@ class NicheModelConfig:
     num_threads: int = 1
     device: str = "cpu"
     deterministic: bool = True
+    # Cross-section coverage threshold for the conserved/sample_specific
+    # separation head (issue #105): 1.0 = strict "present in every section";
+    # lower values (e.g. 0.8) tolerate a conserved prototype missing from a
+    # few small / shallow sections by sampling chance.
+    min_section_coverage: float = 1.0
 
     def encoder_config(self) -> EncoderConfig:
         return EncoderConfig(
@@ -184,25 +189,44 @@ def _kmeans(
 
 
 def _separation_head(
-    prototype_id: np.ndarray, section_id: np.ndarray, n_protos: int
+    prototype_id: np.ndarray,
+    section_id: np.ndarray,
+    n_protos: int,
+    min_section_coverage: float = 1.0,
 ) -> list[str]:
     """Tag each prototype conserved vs sample_specific by cross-section presence.
 
-    Conserved iff the prototype's assigned cells span every section; otherwise
-    sample_specific. Mirrors the synthetic ground-truth definition.
+    Conserved iff the prototype's assigned cells cover at least
+    ``min_section_coverage`` of all sections; otherwise sample_specific. The
+    default ``1.0`` requires presence in *every* section, mirroring the
+    synthetic ground-truth definition.
+
+    The strict "spans every section" rule is brittle to unequal section sizes /
+    sampling depth (issue #105): a genuinely conserved prototype can be absent
+    from one small or shallow section purely by sampling chance and then be
+    mislabelled sample_specific. ``min_section_coverage`` < 1.0 robustifies the
+    threshold -- e.g. ``0.8`` tags a prototype conserved when it appears in at
+    least 80% of sections. The required section count is
+    ``ceil(min_section_coverage * n_sections)``, clamped to ``>= 1``.
 
     With a single section the conserved/sample_specific distinction is
-    undefined (``seen == all_sections`` is trivially true for every populated
-    prototype), so we tag everything ``"unknown"`` to surface the degeneracy
-    instead of confidently asserting all-conserved (issue #85).
+    undefined (every populated prototype trivially covers the lone section),
+    so we tag everything ``"unknown"`` to surface the degeneracy instead of
+    confidently asserting all-conserved (issue #85).
     """
+    if not 0.0 < min_section_coverage <= 1.0:
+        raise ValueError(
+            f"min_section_coverage must be in (0, 1]; got {min_section_coverage}"
+        )
     all_sections = set(np.asarray(section_id).tolist())
-    if len(all_sections) < 2:
+    n_sections = len(all_sections)
+    if n_sections < 2:
         return ["unknown"] * n_protos
+    required = max(1, int(np.ceil(min_section_coverage * n_sections)))
     kinds: list[str] = []
     for p in range(n_protos):
         seen = set(section_id[prototype_id == p].tolist())
-        if seen and seen == all_sections:
+        if seen and len(seen) >= required:
             kinds.append("conserved")
         else:
             kinds.append("sample_specific")
@@ -276,7 +300,9 @@ def fit_niche_model(
     n_protos = int(prototype_id.max()) + 1 if prototype_id.size else 0
 
     # 3) Separation head: conserved vs sample_specific by cross-section presence.
-    proto_kind = _separation_head(prototype_id, section_id, n_protos)
+    proto_kind = _separation_head(
+        prototype_id, section_id, n_protos, cfg.min_section_coverage
+    )
 
     # 4) Per-prototype marker table (issue #82).
     marker_table = _compute_marker_table(X, prototype_id, n_protos, cfg.marker_top_k)
