@@ -107,7 +107,6 @@ def test_minibatch_never_allocates_full_matrix(monkeypatch):
 
 def test_minibatch_loss_decreases_over_epochs():
     """On a small graph the minibatch contrastive loss should decrease."""
-    import torch
 
     from nichelens_st import encoder as enc
 
@@ -117,8 +116,8 @@ def test_minibatch_loss_decreases_over_epochs():
     losses: list[float] = []
     real = enc._info_nce_minibatch
 
-    def spy(z1, z2, tau, batch_size, generator):
-        out = real(z1, z2, tau, batch_size, generator)
+    def spy(z1, z2, tau, batch_size, generator, labels=None):
+        out = real(z1, z2, tau, batch_size, generator, labels)
         losses.append(float(out.detach()))
         return out
 

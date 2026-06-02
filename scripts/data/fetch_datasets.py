@@ -30,6 +30,12 @@ Examples (all offline)::
 A real pull is opt-in and never runs in CI/smoke::
 
     python scripts/data/fetch_datasets.py --dataset gse208253_oscc_visium --download
+
+The actual download / CCC (ligrec) paths import squidpy lazily and require the
+optional data dependencies. Install them with the ``[data]`` extra (or the ``dl``
+conda env) before using ``--download`` or ``run_ligrec``::
+
+    pip install "nichelens-st[data]"
 """
 
 from __future__ import annotations
@@ -56,6 +62,31 @@ CARDS_DIR = REPO_ROOT / "data" / "cards"
 
 class FetchError(RuntimeError):
     """Raised when a dataset cannot be fetched (guarded stub / unverified URL)."""
+
+
+# Gated-dependency guidance for the optional ``[data]`` extra. Mirrors the
+# ``_NO_TORCH_MSG`` / ``_require_torch`` pattern in
+# ``src/nichelens_st/encoder.py`` so the squidpy/scanpy fetch + CCC paths fail
+# with a clear, actionable hint instead of a raw ``ModuleNotFoundError``.
+_NO_DATA_MSG = (
+    "This path requires the optional data dependencies (squidpy/scanpy/anndata). "
+    'Install the data extra: `pip install "nichelens-st[data]"` '
+    "(or use the `dl` conda env), then re-run."
+)
+
+
+def _require_data(component: str = "this dataset path"):
+    """Import squidpy or raise a guided ``FetchError`` naming the ``[data]`` extra.
+
+    Returns the imported ``squidpy`` module so callers can do
+    ``sq = _require_data("ligrec")``. Kept out of the offline surface
+    (``--list``/``--card``/dry-run) because squidpy is imported lazily here.
+    """
+    try:
+        import squidpy as sq  # lazy: not a base dependency
+    except ImportError as exc:  # pragma: no cover - optional heavy dep
+        raise FetchError(f"{component}: {_NO_DATA_MSG}") from exc
+    return sq
 
 
 # --------------------------------------------------------------------------- #
@@ -228,14 +259,7 @@ def _download_url(ds: Dataset, url: str, dest: Path) -> Path:
 
 def _load_squidpy_builtin(ds: Dataset, dest: Path) -> Path:
     """Load a squidpy builtin dataset (figshare mirror) and cache it locally."""
-    try:
-        import squidpy as sq  # lazy: not a base dependency
-    except ImportError as exc:  # pragma: no cover - optional heavy dep
-        raise FetchError(
-            f"{ds.id}: loading requires squidpy (optional). "
-            "Install the data extra (squidpy/scanpy) in the `dl` env, then re-run."
-        ) from exc
-
+    sq = _require_data(ds.id)
     loader_name = ds.reader.rsplit(".", 1)[-1]  # e.g. 'merfish'
     loader = getattr(sq.datasets, loader_name)
     dest.mkdir(parents=True, exist_ok=True)
@@ -290,13 +314,7 @@ def run_ligrec(adata, cluster_key: str, *, n_perms: int = 100, threshold: float 
     with per-niche ``prototype_id`` from the encoder to build ``interaction_summary``
     (see docs/MVP_DESIGN.md).
     """
-    try:
-        import squidpy as sq  # lazy
-    except ImportError as exc:  # pragma: no cover - optional heavy dep
-        raise FetchError(
-            "ligrec requires squidpy (optional). Install the `dl` env (squidpy "
-            "incl. OmniPath backend), then re-run."
-        ) from exc
+    sq = _require_data("ligrec")
     return sq.gr.ligrec(
         adata, cluster_key=cluster_key, n_perms=n_perms, threshold=threshold, copy=True, seed=seed
     )
