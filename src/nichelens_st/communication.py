@@ -129,9 +129,9 @@ def _tidy_ligrec_result(res: Any, pd: Any):
 
     ``ligrec`` returns ``means`` and ``pvalues`` DataFrames indexed by a
     ``(source, target)`` ligand-receptor MultiIndex on the rows and a
-    ``(cluster_1, cluster_2)`` MultiIndex on the columns. We melt both into long
-    form, join on the (ligand, receptor, source, target) key, and drop pairs
-    with no defined mean (filtered out by ``threshold``).
+    ``(cluster_1, cluster_2)`` MultiIndex on the columns. We reshape both into
+    long form, join on the (ligand, receptor, source, target) key, and drop
+    pairs with no defined mean (filtered out by ``threshold``).
     """
     means = res["means"]
     pvalues = res["pvalues"]
@@ -152,18 +152,23 @@ def _tidy_ligrec_result(res: Any, pd: Any):
 
 
 def _melt_ligrec_frame(frame: Any, value_name: str, pd: Any):
-    """Melt one ligrec wide frame (L-R rows x cluster-pair cols) to long form."""
-    # Row MultiIndex: (ligand source gene, receptor target gene).
-    flat = frame.copy()
-    flat.index = flat.index.set_names(["ligand", "receptor"])
-    flat = flat.reset_index()
+    """Reshape one ligrec wide frame (L-R rows x cluster-pair cols) to long form.
 
-    long = flat.melt(
-        id_vars=["ligand", "receptor"],
-        var_name="cluster_pair",
-        value_name=value_name,
+    Uses ``stack`` on the column MultiIndex rather than ``reset_index().melt()``:
+    on a frame with a 2-level column MultiIndex, ``reset_index()`` promotes the
+    row-index labels to *tuples* (e.g. ``('ligand', '')``), which breaks
+    ``melt(id_vars=["ligand", "receptor"])``. Stacking references the levels by
+    name and is robust to level ordering. NaN cells (threshold-screened pairs)
+    are preserved here and dropped later in ``_tidy_ligrec_result``.
+    """
+    flat = frame.copy()
+    # Row MultiIndex: (ligand source gene, receptor target gene).
+    flat.index = flat.index.set_names(["ligand", "receptor"])
+    # Column MultiIndex: (source cluster, target cluster).
+    flat.columns = flat.columns.set_names(["source", "target"])
+    long = (
+        flat.stack(["source", "target"], future_stack=True)
+        .rename(value_name)
+        .reset_index()
     )
-    # Column MultiIndex (source_cluster, target_cluster) melts into a tuple.
-    long["source"] = long["cluster_pair"].map(lambda t: t[0])
-    long["target"] = long["cluster_pair"].map(lambda t: t[1])
-    return long.drop(columns=["cluster_pair"])
+    return long[["ligand", "receptor", "source", "target", value_name]]
