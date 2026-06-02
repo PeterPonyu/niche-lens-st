@@ -184,13 +184,25 @@ degenerates to NaN. ``train_embeddings`` rejects ``tau <= 0`` with a
 underflow corruption."""
 
 
-def _info_nce(z1: "Tensor", z2: "Tensor", tau: float) -> "Tensor":
+def _info_nce(
+    z1: "Tensor", z2: "Tensor", tau: float, labels: "Tensor | None" = None
+) -> "Tensor":
     """NT-Xent / InfoNCE loss over two aligned views of the same nodes.
 
     ``tau`` is clamped to ``[_INFO_NCE_TAU_MIN, +inf)`` so a tiny user
     setting cannot make ``sim = z @ z.t() / tau`` overflow float32 and
     NaN-out the softmax/cross-entropy. ``tau <= 0`` is rejected upstream
     in :func:`train_embeddings` (issue #88).
+
+    Optional ``labels`` (length ``n``, one group id per node) enable
+    prototype/group-aware negative masking (issues #92 / #103). Vanilla NT-Xent
+    treats *every* non-twin cell as a negative, so in a niche dataset -- where
+    many cells share a prototype -- a large fraction of the "negatives" are
+    actually same-niche cells the model should pull together. When ``labels`` is
+    given, off-diagonal entries that share the anchor's group (other than the
+    positive twin) are dropped from the softmax denominator, removing this
+    false-negative repulsion. ``labels=None`` (default) reproduces vanilla
+    NT-Xent exactly.
     """
     safe_tau = max(float(tau), _INFO_NCE_TAU_MIN)
     n = z1.shape[0]
@@ -203,6 +215,17 @@ def _info_nce(z1: "Tensor", z2: "Tensor", tau: float) -> "Tensor":
     targets = torch.cat(
         [torch.arange(n, 2 * n, device=z.device), torch.arange(0, n, device=z.device)]
     )
+    if labels is not None:
+        lab = torch.as_tensor(labels, device=z.device).reshape(-1)
+        if lab.shape[0] != n:
+            raise ValueError(f"labels must have length n={n}; got {lab.shape[0]}")
+        lab2 = torch.cat([lab, lab])  # (2n,)
+        same = lab2.unsqueeze(0) == lab2.unsqueeze(1)  # (2n, 2n)
+        # Keep each row's positive twin even though it shares the anchor's label.
+        keep_pos = torch.zeros_like(same)
+        keep_pos[torch.arange(2 * n, device=z.device), targets] = True
+        false_neg = same & ~diag & ~keep_pos
+        sim = sim.masked_fill(false_neg, float("-inf"))
     return torch.nn.functional.cross_entropy(sim, targets)
 
 
@@ -229,8 +252,15 @@ def train_embeddings(
     X: np.ndarray,
     edges: np.ndarray,
     config: EncoderConfig,
+    labels: np.ndarray | None = None,
 ) -> np.ndarray:
     """Train the contrastive encoder and return float32 niche embeddings ``H``.
+
+    ``labels`` (optional, length ``n``) enables prototype/group-aware negative
+    masking in the InfoNCE loss (issues #92 / #103); ``None`` keeps vanilla
+    NT-Xent. Real unsupervised niche discovery leaves it ``None``; callers with a
+    known grouping (e.g. a semi-supervised setting) can pass it to suppress
+    same-group false negatives.
 
     Determinism: all randomness (parameter init, augmentation, optimizer) is
     seeded from ``config.seed`` on CPU, so a fixed seed yields identical ``H``.
@@ -254,6 +284,11 @@ def train_embeddings(
     try:
         x = torch.from_numpy(np.ascontiguousarray(X, dtype=np.float32)).to(device)
         edge_index = _undirected_edge_index(edges).to(device)
+        labels_t = (
+            torch.from_numpy(np.ascontiguousarray(labels)).to(device)
+            if labels is not None
+            else None
+        )
 
         model = NicheEncoder(
             in_dim=x.shape[1],
@@ -276,7 +311,7 @@ def train_embeddings(
             )
             z1 = model(x1, e1)
             z2 = model(x2, e2)
-            loss = _info_nce(z1, z2, config.tau)
+            loss = _info_nce(z1, z2, config.tau, labels_t)
             loss.backward()
             optimizer.step()
 
