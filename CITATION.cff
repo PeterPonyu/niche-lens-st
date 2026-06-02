@@ -8,8 +8,10 @@ authors:
     alias: PeterPonyu
 repository-code: "https://github.com/PeterPonyu/niche-lens-st"
 license: MIT
+# Pre-release: no `date-released` / `doi` yet — none has been published. When a
+# release is cut, set `version`, `date-released`, and a `doi` (e.g. Zenodo)
+# together, and add a `preferred-citation` block pointing at the manuscript.
 version: 0.0.0.dev0
-date-released: 2026-05-27
 keywords:
   - spatial transcriptomics
   - graph neural networks

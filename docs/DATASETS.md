@@ -231,6 +231,19 @@ python scripts/data/fetch_datasets.py --card cosmx_nsclc_nanostring
 python scripts/data/fetch_datasets.py --dataset xenium_breast_janesick   # dry-run plan
 ```
 
+**Optional `[data]` extra (required for `--download` and `run_ligrec`).** The
+offline surface above (`--list` / `--card` / dry-run) stays dependency-light, but
+the actual download and cell-cell-communication (ligrec) paths import
+squidpy/scanpy/anndata lazily. Install the optional data dependencies first:
+
+```bash
+pip install "nichelens-st[data]"   # or use the `dl` conda env
+```
+
+If they are absent, those paths raise a guarded `FetchError` pointing back at
+this extra (mirroring the `[model]`/torch guard in `nichelens_st.encoder`)
+rather than a raw `ModuleNotFoundError`.
+
 ---
 
 ## High-plex upgrades (newer / superior panels)

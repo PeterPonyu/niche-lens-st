@@ -331,7 +331,7 @@ DATASETS: dict[str, Dataset] = {
         raw_count_policy="squidpy mirror is normalized; use source raw counts for DL training",
         contract={
             **_MERFISH_CONTRACT,
-            "section_id": "factorize(obs[embryo/FOV column]) -> 3 section codes",
+            "section_id": "factorize(obs['embryo']) -> 3 section codes",
             "coords": "obsm['spatial'] (2D centroids)",
             "labels": "obs['celltype_mapped_refined'] -- niche prototype evaluation",
             "transcripts": "n/a in squidpy mirror",
