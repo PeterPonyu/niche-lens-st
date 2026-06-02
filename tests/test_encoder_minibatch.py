@@ -116,8 +116,8 @@ def test_minibatch_loss_decreases_over_epochs():
     losses: list[float] = []
     real = enc._info_nce_minibatch
 
-    def spy(z1, z2, tau, batch_size, generator, labels=None):
-        out = real(z1, z2, tau, batch_size, generator, labels)
+    def spy(z1, z2, tau, batch_size, generator):
+        out = real(z1, z2, tau, batch_size, generator)
         losses.append(float(out.detach()))
         return out
 
