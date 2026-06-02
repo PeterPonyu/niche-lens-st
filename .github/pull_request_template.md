@@ -1,5 +1,6 @@
 <!--
 NicheLens-ST pull request template.
+New here? See the contributor guide: ../CONTRIBUTING.md
 -->
 
 ## Summary
