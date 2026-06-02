@@ -91,7 +91,7 @@ def test_load_dataset_normalizes_float_counts(tmp_path):
     path = tmp_path / "float_counts.h5ad"
     a.write_h5ad(path)
 
-    X, coords, section_id, section_col, normalization, n_obs, n_vars = (
+    X, coords, section_id, section_col, normalization, n_obs, n_vars, _adata = (
         runner._load_dataset(path, already_normalized=False)
     )
 
@@ -116,7 +116,7 @@ def test_load_dataset_respects_already_normalized(tmp_path):
     path = tmp_path / "counts.h5ad"
     a.write_h5ad(path)
 
-    X, *_rest, normalization, _n_obs, _n_vars = runner._load_dataset(
+    X, *_rest, normalization, _n_obs, _n_vars, _adata = runner._load_dataset(
         path, already_normalized=True
     )
     assert normalization["applied"] is False
@@ -179,3 +179,87 @@ def test_batch_size_reaches_model_config(monkeypatch):
             batch_size=2048,
         )
     assert captured["batch_size"] == 2048
+
+
+# --------------------------------------------------------------------------
+# #151 -- --interaction-summary plumbing (default OFF, gated [data] extra)
+# --------------------------------------------------------------------------
+
+
+def test_interaction_summary_flag_default_off():
+    """Default behavior unchanged: the flag defaults to False."""
+    parser = runner._build_parser()
+    args = parser.parse_args([])
+    assert args.interaction_summary is False
+
+
+def test_interaction_summary_flag_parsed():
+    """The --interaction-summary flag parses to True when supplied."""
+    parser = runner._build_parser()
+    args = parser.parse_args(["--interaction-summary"])
+    assert args.interaction_summary is True
+
+
+def test_fit_with_walls_threads_interaction_flag(monkeypatch):
+    """--interaction-summary reaches fit_niche_model(compute_interaction_summary=True).
+
+    Spies on ``fit_niche_model`` so squidpy is never required: we only assert
+    the kwarg is threaded through and that an ``adata`` is supplied for scoring.
+    """
+    from nichelens_st import model as model_mod
+
+    captured = {}
+
+    def spy_fit(*a, **kw):
+        captured["compute_interaction_summary"] = kw.get(
+            "compute_interaction_summary"
+        )
+        captured["adata"] = kw.get("adata")
+        raise RuntimeError("stop after fit dispatched")
+
+    monkeypatch.setattr(model_mod, "fit_niche_model", spy_fit)
+
+    coords = np.zeros((4, 2), dtype=np.float32)
+    X = np.ones((4, 3), dtype=np.float32)
+    section_id = np.zeros(4, dtype=np.int64)
+    adata = _make_adata(X, with_spatial=True)
+
+    with pytest.raises(RuntimeError, match="stop after fit dispatched"):
+        runner._fit_with_walls(
+            X,
+            coords,
+            section_id,
+            max_seconds=10.0,
+            device="cpu",
+            num_threads=1,
+            batch_size=0,
+            compute_interaction_summary=True,
+            adata=adata,
+        )
+    assert captured["compute_interaction_summary"] is True
+    assert captured["adata"] is adata
+
+
+def test_fit_with_walls_interaction_default_off(monkeypatch):
+    """Default fit does NOT request interaction scoring (behavior unchanged)."""
+    from nichelens_st import model as model_mod
+
+    captured = {}
+
+    def spy_fit(*a, **kw):
+        captured["compute_interaction_summary"] = kw.get(
+            "compute_interaction_summary", False
+        )
+        raise RuntimeError("stop")
+
+    monkeypatch.setattr(model_mod, "fit_niche_model", spy_fit)
+
+    coords = np.zeros((4, 2), dtype=np.float32)
+    X = np.ones((4, 3), dtype=np.float32)
+    section_id = np.zeros(4, dtype=np.int64)
+
+    with pytest.raises(RuntimeError, match="stop"):
+        runner._fit_with_walls(
+            X, coords, section_id, max_seconds=10.0, device="cpu", num_threads=1
+        )
+    assert captured["compute_interaction_summary"] is False

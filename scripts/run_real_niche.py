@@ -172,7 +172,16 @@ def _load_dataset(path: Path, already_normalized: bool):
         section_id = np.zeros(n_obs, dtype=np.int64)
 
     normalization = {"applied": applied, "method": method}
-    return X, coords, section_id, section_col, normalization, n_obs, n_vars
+    return (
+        X,
+        coords,
+        section_id,
+        section_col,
+        normalization,
+        n_obs,
+        n_vars,
+        adata,
+    )
 
 
 def _intrinsic_metrics(result, edges, section_id, seed):
@@ -241,13 +250,26 @@ def _intrinsic_metrics(result, edges, section_id, seed):
 
 
 def _fit_with_walls(
-    X, coords, section_id, max_seconds, device, num_threads, batch_size=0
+    X,
+    coords,
+    section_id,
+    max_seconds,
+    device,
+    num_threads,
+    batch_size=0,
+    compute_interaction_summary=False,
+    adata=None,
 ):
     """Run fit_niche_model, guarding the encoder + _kmeans (n,k,d) walls.
 
     Returns (result, edges, elapsed_s). Raises on OOM / over-budget so the
     caller can fall back to the smaller dataset. ``batch_size`` (#61) is
     threaded into the model config to bound the InfoNCE matrix to O(batch^2).
+
+    When ``compute_interaction_summary`` is True (#151), the fitted
+    ``prototype_id`` is used to score ligand-receptor enrichment via the gated
+    ``[data]`` extra (squidpy/OmniPath); ``adata`` (an AnnData with named genes)
+    must be supplied. The default (False) leaves the fit path squidpy-free.
     """
     from nichelens_st import model as _model
     from nichelens_st.graph import build_graph
@@ -266,7 +288,13 @@ def _fit_with_walls(
     t0 = time.time()
     try:
         result = _model.fit_niche_model(
-            X=X, coords=coords, section_id=section_id, edges=edges, config=cfg
+            X=X,
+            coords=coords,
+            section_id=section_id,
+            edges=edges,
+            config=cfg,
+            compute_interaction_summary=compute_interaction_summary,
+            adata=adata,
         )
     except _cuda_oom_error() as exc:  # narrow: CUDA OOM only
         raise RuntimeError(
@@ -280,6 +308,38 @@ def _fit_with_walls(
             f"fit exceeded budget: {elapsed:.1f}s > {max_seconds:.1f}s"
         )
     return result, edges, elapsed
+
+
+def _interaction_output_rel(summary_df) -> str:
+    """Pick the interaction_summary output relative path (parquet if available).
+
+    Prefers ``outputs/interaction_summary.parquet`` when a parquet engine
+    (pyarrow/fastparquet) is importable; otherwise falls back to CSV. Only the
+    relative path string is returned here -- the file is written later, once the
+    results-contract ``outputs/`` dir exists.
+    """
+    try:
+        import importlib
+
+        importlib.import_module("pyarrow")
+        return "outputs/interaction_summary.parquet"
+    except Exception:  # noqa: BLE001
+        try:
+            import importlib
+
+            importlib.import_module("fastparquet")
+            return "outputs/interaction_summary.parquet"
+        except Exception:  # noqa: BLE001
+            return "outputs/interaction_summary.csv"
+
+
+def _write_interaction_summary(summary_df, outputs_dir: Path, rel: str) -> None:
+    """Persist the interaction_summary DataFrame to ``outputs_dir`` as parquet/csv."""
+    dest = outputs_dir / Path(rel).name
+    if dest.suffix == ".parquet":
+        summary_df.to_parquet(dest, index=False)
+    else:
+        summary_df.to_csv(dest, index=False)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -299,6 +359,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Minibatch InfoNCE size (#61). 0 keeps the exact full-batch loss; "
             ">0 bounds the contrastive matrix to O(batch^2) for large datasets."
+        ),
+    )
+    parser.add_argument(
+        "--interaction-summary",
+        action="store_true",
+        help=(
+            "Score ligand-receptor enrichment per prototype pair (#151) and "
+            "write outputs/interaction_summary.{parquet,csv}. OFF by default; "
+            "requires the optional [data] extra (squidpy/OmniPath) -- the run "
+            "errors actionably if invoked without it."
         ),
     )
     return parser
@@ -329,9 +399,16 @@ def main() -> int:
     seed = 0
 
     def run_on(path: Path, label: str):
-        X, coords, section_id, section_col, normalization, n_obs, n_vars = (
-            _load_dataset(path, args.already_normalized)
-        )
+        (
+            X,
+            coords,
+            section_id,
+            section_col,
+            normalization,
+            n_obs,
+            n_vars,
+            adata,
+        ) = _load_dataset(path, args.already_normalized)
         result, edges, elapsed = _fit_with_walls(
             X,
             coords,
@@ -340,6 +417,8 @@ def main() -> int:
             device,
             num_threads,
             batch_size=args.batch_size,
+            compute_interaction_summary=args.interaction_summary,
+            adata=adata if args.interaction_summary else None,
         )
         metrics, notes_extra = _intrinsic_metrics(result, edges, section_id, seed)
         return dict(
@@ -385,17 +464,32 @@ def main() -> int:
     notes.append(f"section_id source: {run['section_col'] or 'single-section zeros'}")
     notes.append(f"fit_runtime_s={run['elapsed']:.2f}")
 
+    # Optionally persist the ligand-receptor interaction_summary (#151). Written
+    # only when --interaction-summary is set AND the fit produced a table; the
+    # output path is recorded in run_metadata.outputs for provenance.
+    interaction_rel = None
+    if args.interaction_summary:
+        summary_df = getattr(run["result"], "interaction_summary", None)
+        if summary_df is not None:
+            interaction_rel = _interaction_output_rel(summary_df)
+            notes.append(f"interaction_summary rows={len(summary_df)}")
+        else:
+            notes.append("interaction_summary requested but result was empty")
+
     # Write outputs/ artifacts: niche.npz (H, prototype_id) + proto_kind.json.
     card_id = results_contract.dataset_card_id([str(used_path)])
     results_dir = _REPO_ROOT / "results"
+    outputs_manifest = {
+        "niche": "outputs/niche.npz",
+        "proto_kind": "outputs/proto_kind.json",
+    }
+    if interaction_rel is not None:
+        outputs_manifest["interaction_summary"] = interaction_rel
     paths = results_contract.write_results(
         project="niche-lens-st",
         dataset_card_id=card_id,
         metrics=run["metrics"],
-        outputs={
-            "niche": "outputs/niche.npz",
-            "proto_kind": "outputs/proto_kind.json",
-        },
+        outputs=outputs_manifest,
         run_metadata={
             "dataset_paths": [str(used_path)],
             "n_obs": run["n_obs"],
@@ -435,6 +529,12 @@ def main() -> int:
 
     with open(outputs_dir / "proto_kind.json", "w", encoding="utf-8") as fh:
         json.dump(list(run["result"].proto_kind), fh, indent=2)
+
+    if interaction_rel is not None:
+        _write_interaction_summary(
+            run["result"].interaction_summary, outputs_dir, interaction_rel
+        )
+        print(f"interaction_summary -> {outputs_dir / Path(interaction_rel).name}")
 
     print(f"dataset used: {run['label']} ({used_path})")
     print(f"n_obs={run['n_obs']} n_vars={run['n_vars']} device={device}")
