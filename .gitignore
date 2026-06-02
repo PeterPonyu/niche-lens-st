@@ -32,6 +32,7 @@ data/cache/
 # Generated outputs
 results/*
 !results/README.md
+!results/paper_metrics/
 manuscript/*.aux
 manuscript/*.bbl
 manuscript/*.blg

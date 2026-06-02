@@ -37,8 +37,12 @@ plus k-means initialization), so a fixed seed yields identical ``prototype_id``.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    import pandas as pd
 
 from nichelens_st.encoder import TORCH_AVAILABLE, EncoderConfig, train_embeddings
 from nichelens_st.schemas import validate_inputs
@@ -72,6 +76,10 @@ class NicheModelConfig:
     num_threads: int = 1
     device: str = "cpu"
     deterministic: bool = True
+    # Minibatch InfoNCE knob (#61). 0 (default) keeps full-batch NT-Xent; a
+    # positive value bounds the contrastive matrix to O(batch^2), enabling
+    # large datasets (124k cells) without the O(n^2) OOM.
+    batch_size: int = 0
     # Cross-section coverage threshold for the conserved/sample_specific
     # separation head (issue #105): 1.0 = strict "present in every section";
     # lower values (e.g. 0.8) tolerate a conserved prototype missing from a
@@ -92,6 +100,7 @@ class NicheModelConfig:
             num_threads=self.num_threads,
             device=self.device,
             deterministic=self.deterministic,
+            batch_size=self.batch_size,
         )
 
 
@@ -105,6 +114,11 @@ class NicheModelResult:
     # Per-prototype top-k gene indices by mean X (issue #82). Empty by
     # default for back-compat with callers that build the result directly.
     marker_table: list[list[int]] = field(default_factory=list)
+    # Per-prototype(-pair) ligand-receptor enrichment table (issues #57/#151).
+    # ``None`` unless interaction scoring is explicitly requested at fit time
+    # via the optional ``[data]`` extra (squidpy/OmniPath). Tidy schema lives in
+    # ``nichelens_st.communication.INTERACTION_SUMMARY_COLUMNS``.
+    interaction_summary: "pd.DataFrame | None" = None
 
 
 def _unit_rows(M: np.ndarray) -> np.ndarray:
@@ -259,6 +273,10 @@ def fit_niche_model(
     section_id: np.ndarray,
     edges: np.ndarray,
     config: NicheModelConfig | None = None,
+    *,
+    compute_interaction_summary: bool = False,
+    adata: Any | None = None,
+    interaction_kwargs: dict[str, Any] | None = None,
 ) -> NicheModelResult:
     """Fit the contrastive encoder and prototype/separation head end to end.
 
@@ -284,6 +302,17 @@ def fit_niche_model(
 
     Hence two runs with the same seed produce identical ``prototype_id``,
     ``proto_kind`` and ``marker_table``.
+
+    Cell-cell communication (optional, off by default)
+    --------------------------------------------------
+    When ``compute_interaction_summary=True`` and an ``adata`` (an
+    :class:`anndata.AnnData` with named genes in ``var_names``) is supplied, the
+    fitted ``prototype_id`` is attached as an ``obs`` column and ligand-receptor
+    enrichment is scored via :func:`nichelens_st.communication.compute_interaction_summary`
+    (squidpy/OmniPath, the optional ``[data]`` extra). The result populates
+    ``NicheModelResult.interaction_summary``. The default path does **not** import
+    squidpy and leaves the field ``None``, so existing behavior and tests are
+    unchanged and no new hard dependency is pulled at fit time.
     """
     cfg = config or NicheModelConfig()
     # Validate the full input contract up front so callers get a clear
@@ -307,9 +336,41 @@ def fit_niche_model(
     # 4) Per-prototype marker table (issue #82).
     marker_table = _compute_marker_table(X, prototype_id, n_protos, cfg.marker_top_k)
 
+    # 5) Optional ligand-receptor interaction_summary (issues #57/#151). Gated
+    #    behind an explicit flag so the default path stays squidpy-free.
+    interaction_summary = None
+    if compute_interaction_summary:
+        interaction_summary = _score_interactions(
+            prototype_id, adata, interaction_kwargs or {}
+        )
+
     return NicheModelResult(
         H=H,
         prototype_id=prototype_id,
         proto_kind=proto_kind,
         marker_table=marker_table,
+        interaction_summary=interaction_summary,
     )
+
+
+def _score_interactions(
+    prototype_id: np.ndarray,
+    adata: Any | None,
+    kwargs: dict[str, Any],
+):
+    """Attach prototype labels to ``adata`` and score L-R interactions.
+
+    Import of the communication helper (and thus squidpy) is deferred to here so
+    the default fit path never touches the optional ``[data]`` extra.
+    """
+    if adata is None:
+        raise ValueError(
+            "compute_interaction_summary=True requires an `adata` "
+            "(AnnData with named genes) to score ligand-receptor pairs."
+        )
+    from nichelens_st.communication import compute_interaction_summary as _score
+
+    cluster_key = kwargs.pop("cluster_key", "prototype_id")
+    # Stringify prototype ids into a categorical obs column squidpy can group on.
+    adata.obs[cluster_key] = [str(int(p)) for p in np.asarray(prototype_id)]
+    return _score(adata, cluster_key=cluster_key, **kwargs)
