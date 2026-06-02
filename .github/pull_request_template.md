@@ -1,14 +1,22 @@
 <!--
 NicheLens-ST pull request template.
+New here? See the contributor guide: ../CONTRIBUTING.md
 -->
 
 ## Summary
 
 <one-paragraph description of the change>
 
-## Closes / refs
+## Related issues
 
-Closes #<issue>
+<!--
+Use GitHub closing keywords to link issues:
+- Closes #N  — resolves and closes the issue when this PR is merged
+- Refs #N / Part of #N  — references without closing (use for roadmap/tracking issues)
+-->
+
+Closes #
+<!-- Refs # -->
 
 ## Independence and provenance checklist
 

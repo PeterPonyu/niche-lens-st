@@ -27,12 +27,12 @@ For cell `i`, the cell-centered subgraph is the induced subgraph of `edges` over
 
 ## Acceptance matrix
 
-| Output | Claim-ledger row | Future test hook |
+| Output | Claim-ledger row | Test coverage |
 |---|---|---|
 | `H` | "reproducible niche prototypes" | `tests/test_embedding_reproducibility.py` |
-| `prototype_id`, `proto_kind` | "conserved vs sample-specific" | `tests/test_prototype_tagging.py` |
-| `marker_table` | "improves interpretability over generic clustering" | `tests/test_marker_enrichment.py` |
-| `interaction_summary` | "improves interpretability" | `tests/test_interaction_summary.py` |
+| `prototype_id`, `proto_kind` | "conserved vs sample-specific" | `tests/test_model_outputs.py` (prototype/separation head); `tests/synth/test_*_metrics.py` (recovery/coherence on synthetic niches) |
+| `marker_table` | "improves interpretability over generic clustering" | _not yet implemented_ — output not produced by `NicheModelResult`; no test yet |
+| `interaction_summary` | "improves interpretability" | _not yet implemented_ — output not produced by `NicheModelResult`; no test yet |
 
 ## Out of scope for MVP
 
