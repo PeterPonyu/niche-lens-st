@@ -115,6 +115,23 @@ def _load_dataset(path: Path, already_normalized: bool):
     return X, coords, section_id, section_col, normalization, n_obs, n_vars
 
 
+def _conserved_fraction(proto_kind, n_sections: int):
+    """Fraction of *scorable* prototypes tagged conserved, or ``None`` (issue #150).
+
+    Returns ``None`` when the value is undefined: a single-section run (the
+    conserved/sample_specific distinction is degenerate) or when no prototype
+    carries a conserved/sample_specific tag (e.g. all ``"unknown"``). "unknown"
+    tags are excluded from the denominator so they never deflate the fraction.
+    """
+    if int(n_sections) < 2:
+        return None
+    scorable = [k for k in proto_kind if k in ("conserved", "sample_specific")]
+    if not scorable:
+        return None
+    conserved = sum(1 for k in scorable if k == "conserved")
+    return float(conserved / len(scorable))
+
+
 def _intrinsic_metrics(result, edges, section_id, seed):
     """Intrinsic-only metrics: prototype structure, niche Moran's I, silhouette."""
     from nichelens_st.metrics import morans_i
@@ -166,16 +183,12 @@ def _intrinsic_metrics(result, edges, section_id, seed):
         metrics["embedding_silhouette"] = None
         notes_extra.append("silhouette needs >=2 prototypes in subsample")
 
-    # Conserved fraction (needs >=2 sections to be meaningful).
+    # Conserved fraction (undefined for single-section runs; issue #150).
     n_sections = int(np.unique(section_id).size)
     proto_kind = list(result.proto_kind)
-    if proto_kind:
-        conserved = sum(1 for k in proto_kind if k == "conserved")
-        metrics["conserved_fraction"] = float(conserved / len(proto_kind))
-    else:
-        metrics["conserved_fraction"] = None
+    metrics["conserved_fraction"] = _conserved_fraction(proto_kind, n_sections)
     if n_sections < 2:
-        notes_extra.append("single_section=True (conserved_fraction degenerate)")
+        notes_extra.append("single_section=True (conserved_fraction undefined)")
 
     return metrics, notes_extra
 
