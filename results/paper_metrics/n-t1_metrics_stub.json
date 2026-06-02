@@ -1,0 +1,14 @@
+{
+  "asset_id": "N-T1",
+  "project": "NicheLens-ST",
+  "role": "multi-method comparison table — niche detection metrics (ARI, NMI, silhouette) across NicheLens-ST and baseline methods",
+  "readiness_status": "contract-only",
+  "source_metric_reference": "planned",
+  "source_script_reference": "planned",
+  "source_exists": false,
+  "metric_source_exists": false,
+  "artifact_exists": false,
+  "supports_safe_prose": false,
+  "paper_claim_ready": false,
+  "notes": "Stub metric record for reproducibility tracking; not paper-claim-ready until claim ID, benchmark metric artifact, data card, and rendered figure are validated."
+}
