@@ -165,7 +165,7 @@ def test_tidy_ligrec_result_reshape_no_squidpy():
     ligand/receptor (gene pair) and source/target (cluster pair) mapping, and
     that NaN-mean (threshold-screened) rows are dropped.
     """
-    import pandas as pd
+    pd = pytest.importorskip("pandas")
 
     from nichelens_st.communication import (
         INTERACTION_SUMMARY_COLUMNS,
@@ -229,7 +229,7 @@ def test_melt_ligrec_frame_robust_to_level_ordering_no_squidpy():
     permuted, name-based access must still produce the correct ligand/receptor
     and source/target columns.
     """
-    import pandas as pd
+    pd = pytest.importorskip("pandas")
 
     from nichelens_st.communication import _melt_ligrec_frame
 
