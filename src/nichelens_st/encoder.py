@@ -75,8 +75,11 @@ def _require_torch() -> None:
 def _undirected_edge_index(edges: np.ndarray) -> "Tensor":
     """Symmetrize a (2, n_edges) int64 COO array into a torch edge index.
 
-    Self-loops are added so isolated/center nodes always aggregate their own
-    feature during message passing.
+    Only symmetrization is performed: every ``(u, v)`` edge gets its reverse
+    ``(v, u)`` so message passing is undirected. No self-loops are added — each
+    node's own feature is preserved downstream by the GraphSAGE-style
+    ``[h ; mean(neighbors)]`` concatenation in ``_MeanAggLayer`` (an isolated
+    node contributes a zero neighbor-mean, keeping only its own ``h``).
     """
     src = edges[0]
     dst = edges[1]
