@@ -16,11 +16,16 @@ Usage (under the project's conda env):
     conda run --no-capture-output -n dl python scripts/run_real_niche.py
 
 Flags:
-    --already-normalized   Skip the conditional log1p (treat X as normalized).
+    --already-normalized   Skip conditional normalize_total+log1p (treat X as
+                           already normalized).
     --dataset {auto,primary,fallback}
                            Force a dataset; ``auto`` (default) tries primary
                            then falls back on a memory/time wall.
     --max-seconds N        Wall-time budget for the primary fit before fallback.
+    --batch-size N         Minibatch InfoNCE size (#61). 0 (default) keeps the
+                           exact full-batch loss; a positive value bounds the
+                           contrastive matrix to O(batch^2), enabling the 124k
+                           primary dataset without the ~232 GiB OOM.
 """
 
 from __future__ import annotations
@@ -48,8 +53,48 @@ SILHOUETTE_MAX = 10_000
 DEFAULT_MAX_SECONDS = 1800.0
 
 
+class _NeverRaised(Exception):
+    """Sentinel exception type that is never raised (torch-absent fallback)."""
+
+
+def _cuda_oom_error():
+    """Return the narrow CUDA OOM exception type to catch.
+
+    Narrows the previously broad ``except RuntimeError`` to torch's dedicated
+    ``torch.cuda.OutOfMemoryError`` (#61). If torch is unavailable, return a
+    sentinel type so the ``except`` clause never matches anything else.
+    """
+    try:
+        import torch
+
+        return torch.cuda.OutOfMemoryError
+    except Exception:  # noqa: BLE001
+        return _NeverRaised
+
+
 def _looks_like_raw_counts(X) -> bool:
-    """Heuristic: integer-valued and/or large max => raw counts (apply log1p)."""
+    """Heuristic: does ``X`` look like raw (unnormalized, un-logged) counts?
+
+    Detect count-like matrices regardless of integer-vs-float dtype. MERSCOPE /
+    MERFISH high-plex panels frequently store whole-number (or near-whole-number,
+    e.g. volume-normalized) transcript counts as ``float32``; the old
+    ``integer_valued AND max>50`` rule silently skipped normalization on that
+    float storage, leaking raw counts into the encoder (#154).
+
+    A matrix looks like raw counts when:
+
+    * it is non-negative (log/scaled data may be negative), and
+    * its dynamic range is count-like rather than already log-compressed --
+      i.e. the max value is larger than what log1p of a typical library would
+      produce. log1p-normalized expression rarely exceeds ~12-15, whereas raw
+      high-plex counts routinely exceed that. We use ``max > 30`` as the
+      count-vs-log discriminator (well above any plausible log1p value, well
+      below typical raw maxima).
+
+    Integer-valued data is additionally treated as counts whenever it is not
+    obviously a tiny binarized/log range, so legacy integer-count inputs keep
+    being normalized.
+    """
     import scipy.sparse as sp
 
     sample = X[: min(X.shape[0], 2000)]
@@ -57,11 +102,23 @@ def _looks_like_raw_counts(X) -> bool:
     arr = np.asarray(arr, dtype=np.float64)
     if arr.size == 0:
         return False
+
+    # Negative values => not raw counts (scaled / centered / PCA'd).
+    if float(arr.min()) < 0.0:
+        return False
+
+    max_val = float(arr.max())
     integer_valued = bool(np.allclose(arr, np.round(arr)))
-    large_max = float(arr.max()) > 50.0
-    # Raw counts are integer-valued; a large max alone (non-integer, normalized)
-    # should NOT trigger log1p. Require integer-valued counts.
-    return integer_valued and (large_max or float(arr.max()) >= 1.0)
+
+    # Count-like dynamic range, independent of dtype. log1p expression maxes out
+    # well below this; raw counts (int OR float-stored) exceed it.
+    count_like_range = max_val > 30.0
+
+    # Integer-valued, non-trivial-range data is also counts even if the max is
+    # modest (e.g. a low-depth panel), matching the legacy integer behavior.
+    integer_counts = integer_valued and max_val >= 2.0
+
+    return count_like_range or integer_counts
 
 
 def _to_dense_float32(X) -> np.ndarray:
@@ -83,13 +140,16 @@ def _load_dataset(path: Path, already_normalized: bool):
     adata = sc.read_h5ad(str(path))
     n_obs, n_vars = int(adata.shape[0]), int(adata.shape[1])
 
-    # Conditional log1p (plan §4.4 step 1): apply only on a raw-counts heuristic
-    # unless explicitly told the matrix is already normalized.
+    # Conditional normalization (plan §4.4 step 1): for count-like input
+    # (integer OR float-stored, e.g. MERSCOPE 315-plex, #154) total-count
+    # normalize then log1p, so raw counts never reach the encoder. Skipped when
+    # the caller asserts the matrix is already normalized.
     if already_normalized:
         applied, method = False, "none"
     elif _looks_like_raw_counts(adata.X):
+        sc.pp.normalize_total(adata)
         sc.pp.log1p(adata)
-        applied, method = True, "log1p"
+        applied, method = True, "normalize_total+log1p"
     else:
         applied, method = False, "none"
 
@@ -180,29 +240,40 @@ def _intrinsic_metrics(result, edges, section_id, seed):
     return metrics, notes_extra
 
 
-def _fit_with_walls(X, coords, section_id, max_seconds, device, num_threads):
+def _fit_with_walls(
+    X, coords, section_id, max_seconds, device, num_threads, batch_size=0
+):
     """Run fit_niche_model, guarding the encoder + _kmeans (n,k,d) walls.
 
-    Returns (result, elapsed_s). Raises on OOM / over-budget so the caller can
-    fall back to the smaller dataset.
+    Returns (result, edges, elapsed_s). Raises on OOM / over-budget so the
+    caller can fall back to the smaller dataset. ``batch_size`` (#61) is
+    threaded into the model config to bound the InfoNCE matrix to O(batch^2).
     """
+    from nichelens_st import model as _model
     from nichelens_st.graph import build_graph
-    from nichelens_st.model import NicheModelConfig, fit_niche_model
 
     edges = build_graph(coords, section_id, k=6, method="knn")
 
-    cfg = NicheModelConfig(
+    cfg = _model.NicheModelConfig(
         embed_dim=EMBED_DIM,
         n_prototypes=N_PROTOTYPES,
         seed=0,
         num_threads=num_threads,
         device=device,
         deterministic=False,
+        batch_size=int(batch_size),
     )
     t0 = time.time()
-    result = fit_niche_model(
-        X=X, coords=coords, section_id=section_id, edges=edges, config=cfg
-    )
+    try:
+        result = _model.fit_niche_model(
+            X=X, coords=coords, section_id=section_id, edges=edges, config=cfg
+        )
+    except _cuda_oom_error() as exc:  # narrow: CUDA OOM only
+        raise RuntimeError(
+            "CUDA out of memory during niche fit; rerun with a smaller "
+            "--batch-size (e.g. --batch-size 4096) to bound the InfoNCE "
+            f"matrix to O(batch^2). Original error: {exc}"
+        ) from exc
     elapsed = time.time() - t0
     if elapsed > max_seconds:
         raise TimeoutError(
@@ -211,13 +282,30 @@ def _fit_with_walls(X, coords, section_id, max_seconds, device, num_threads):
     return result, edges, elapsed
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--already-normalized", action="store_true")
     parser.add_argument(
         "--dataset", choices=("auto", "primary", "fallback"), default="auto"
     )
     parser.add_argument("--max-seconds", type=float, default=DEFAULT_MAX_SECONDS)
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=0,
+        help=(
+            "Minibatch InfoNCE size (#61). 0 keeps the exact full-batch loss; "
+            ">0 bounds the contrastive matrix to O(batch^2) for large datasets."
+        ),
+    )
+    return parser
+
+
+def main() -> int:
+    parser = _build_parser()
     args = parser.parse_args()
 
     # Ensure the package is importable when running from a source checkout.
@@ -245,7 +333,13 @@ def main() -> int:
             _load_dataset(path, args.already_normalized)
         )
         result, edges, elapsed = _fit_with_walls(
-            X, coords, section_id, args.max_seconds, device, num_threads
+            X,
+            coords,
+            section_id,
+            args.max_seconds,
+            device,
+            num_threads,
+            batch_size=args.batch_size,
         )
         metrics, notes_extra = _intrinsic_metrics(result, edges, section_id, seed)
         return dict(
@@ -312,6 +406,7 @@ def main() -> int:
             "device": device,
             "deterministic": False,
             "num_threads": num_threads,
+            "batch_size": int(args.batch_size),
             "reproducibility_level": reproducibility_level,
             "normalization": run["normalization"],
             "interpretability": {
