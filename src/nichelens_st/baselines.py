@@ -112,23 +112,30 @@ def neighborhood_augmented_embedding(
 def pca_embedding(
     X: np.ndarray, *, n_components: int = 32, seed: int = 0
 ) -> np.ndarray:
-    """Seeded PCA-of-expression embedding (non-spatial reference baseline).
+    """PCA-of-expression embedding (non-spatial reference baseline).
 
-    Mirrors the intrinsic ``pca_baseline_silhouette`` reference: the number of
-    components is clamped to ``min(n_components, n_genes, n_cells - 1)``. Returns
-    a ``(n_cells, n_comp)`` float64 array.
+    Pure-``numpy`` PCA via the economy SVD of the mean-centered matrix, so the
+    baseline carries no scikit-learn dependency (it must run in the minimal CI
+    matrix). The number of components is clamped to
+    ``min(n_components, n_genes, n_cells - 1)``. A deterministic component-sign
+    convention (largest-magnitude loading made positive) removes the SVD sign
+    ambiguity so the projection is reproducible across BLAS backends. ``seed`` is
+    accepted for API parity with the other baselines (the SVD path is exact and
+    needs no randomness). Returns a ``(n_cells, n_comp)`` float64 array.
     """
-    from sklearn.decomposition import PCA
-
+    del seed  # exact SVD; accepted only for a uniform baseline signature
     Xa = np.asarray(X, dtype=np.float64)
     if Xa.ndim != 2:
         raise ValueError(f"X must be (n_cells, n_genes); got {Xa.shape}")
-    n_comp = int(min(n_components, Xa.shape[1], Xa.shape[0] - 1))
-    n_comp = max(1, n_comp)
-    return np.asarray(
-        PCA(n_components=n_comp, random_state=seed).fit_transform(Xa),
-        dtype=np.float64,
-    )
+    n_comp = max(1, int(min(n_components, Xa.shape[1], Xa.shape[0] - 1)))
+    Xc = Xa - Xa.mean(axis=0, keepdims=True)
+    U, S, Vt = np.linalg.svd(Xc, full_matrices=False)
+    # Deterministic sign: make each component's largest-magnitude loading positive.
+    max_abs = np.argmax(np.abs(Vt), axis=1)
+    signs = np.sign(Vt[np.arange(Vt.shape[0]), max_abs])
+    signs[signs == 0] = 1.0
+    scores = (U * signs) * S
+    return np.ascontiguousarray(scores[:, :n_comp], dtype=np.float64)
 
 
 def _unit_rows(M: np.ndarray) -> np.ndarray:
