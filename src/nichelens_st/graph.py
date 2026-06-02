@@ -22,11 +22,12 @@ def build_graph(
 
     ``method="knn"`` uses ``scipy.spatial.cKDTree`` and clamps each section to
     at most ``m - 1`` outgoing neighbors, so singleton sections produce no edges.
-    ``method="delaunay"`` is reserved for a future implementation.
+    ``method="delaunay"`` uses ``scipy.spatial.Delaunay`` to build a per-section
+    Delaunay triangulation; sections with fewer than 3 cells produce no edges.
     """
+    if method == "delaunay":
+        return _build_delaunay_graph(coords, section_id)
     if method != "knn":
-        if method == "delaunay":
-            raise NotImplementedError("method='delaunay' is not implemented yet")
         raise GraphError(f"unsupported graph method: {method!r}")
     if k < 0:
         raise GraphError(f"k must be non-negative; got {k}")
@@ -74,6 +75,69 @@ def build_graph(
         cols = nn_local.reshape(-1)
         src_chunks.append(idx[rows])
         dst_chunks.append(idx[cols])
+
+    if not src_chunks:
+        return np.zeros((2, 0), dtype=np.int64)
+    return np.stack([np.concatenate(src_chunks), np.concatenate(dst_chunks)]).astype(np.int64)
+
+
+def _build_delaunay_graph(coords: np.ndarray, section_id: np.ndarray) -> np.ndarray:
+    """Build a per-section Delaunay triangulation graph as int64 COO edges.
+
+    Sections with fewer than 3 cells cannot form a simplex and produce no edges.
+    The returned edge_index is symmetric (undirected): every edge (u, v) appears
+    as both (u, v) and (v, u), matching the kNN path's convention.
+    """
+    if coords.ndim != 2 or coords.shape[1] not in (2, 3):
+        raise GraphError(f"coords must be (n_cells, 2) or (n_cells, 3); got {coords.shape}")
+    if section_id.ndim != 1 or section_id.shape[0] != coords.shape[0]:
+        raise GraphError(f"section_id must be (n_cells,); got {section_id.shape}")
+    if not np.isfinite(coords).all():
+        raise GraphError("coords contains NaN or Inf")
+    if coords.shape[0] == 0:
+        return np.zeros((2, 0), dtype=np.int64)
+
+    try:
+        from scipy.spatial import Delaunay
+    except ImportError as exc:  # pragma: no cover - dependency declared in pyproject
+        raise GraphError("build_graph(method='delaunay') requires scipy") from exc
+
+    src_chunks: list[np.ndarray] = []
+    dst_chunks: list[np.ndarray] = []
+    for section in np.unique(section_id):
+        idx = np.where(section_id == section)[0]
+        m = idx.size
+        # Delaunay triangulation requires at least 3 non-collinear points in 2-D
+        # (or 4 non-coplanar in 3-D). Fewer points produce no simplices.
+        if m < 3:
+            continue
+        pts = coords[idx]
+        try:
+            tri = Delaunay(pts)
+        except Exception:  # noqa: BLE001 — degenerate geometry
+            continue
+        simplices = tri.simplices  # shape (n_simplices, ndim+1)
+        # Extract all edges from simplices: each simplex has ndim+1 vertices;
+        # iterate over all pairs of vertices within each simplex.
+        n_verts = simplices.shape[1]
+        edge_set: set[tuple[int, int]] = set()
+        for i in range(n_verts):
+            for j in range(i + 1, n_verts):
+                u_local = simplices[:, i]
+                v_local = simplices[:, j]
+                # Canonicalize to deduplicate: store as (min, max) pairs.
+                pairs = np.stack([np.minimum(u_local, v_local),
+                                   np.maximum(u_local, v_local)], axis=1)
+                for u, v in pairs.tolist():
+                    edge_set.add((u, v))
+        if not edge_set:
+            continue
+        canonical = np.array(sorted(edge_set), dtype=np.int64)  # (n_edges, 2)
+        u_local = canonical[:, 0]
+        v_local = canonical[:, 1]
+        # Symmetrize: add both directions.
+        src_chunks.append(idx[np.concatenate([u_local, v_local])])
+        dst_chunks.append(idx[np.concatenate([v_local, u_local])])
 
     if not src_chunks:
         return np.zeros((2, 0), dtype=np.int64)
