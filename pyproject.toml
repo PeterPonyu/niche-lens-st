@@ -33,6 +33,10 @@ data = ["squidpy>=1.6,<2", "scanpy>=1.10,<2", "anndata>=0.10,<1", "h5py>=3,<4"]
 # scripts/run_real_niche.py). The base package stays numpy/scipy-only; scanpy
 # and anndata are required only to run the real-data path standalone.
 real-data = ["scanpy>=1.10", "anndata>=0.10"]
+# Optional visualization extra for scripts/plot_niche_results.py (UMAP + niche
+# overlay). matplotlib is the only hard requirement; the UMAP step uses scanpy
+# when available (see [data]) and falls back to numpy SVD otherwise.
+viz = ["matplotlib>=3,<4"]
 
 [project.urls]
 Homepage = "https://github.com/PeterPonyu/niche-lens-st"
