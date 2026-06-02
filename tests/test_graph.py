@@ -94,6 +94,98 @@ def test_extract_subgraph_k_hops_and_isolated():
     assert sub_iso.shape == (2, 0)
 
 
+def test_build_graph_delaunay_dtype_and_shape():
+    """method='delaunay' returns (2, n_edges) int64 array."""
+    rng = np.random.default_rng(0)
+    coords = rng.random((20, 2)).astype(np.float32)
+    section_id = np.zeros(20, dtype=np.int64)
+    edges = build_graph(coords, section_id, method="delaunay")
+    assert edges.dtype == np.int64
+    assert edges.ndim == 2
+    assert edges.shape[0] == 2
+    assert edges.shape[1] > 0
+
+
+def test_build_graph_delaunay_symmetric():
+    """Every edge (u, v) must have a corresponding reverse edge (v, u)."""
+    rng = np.random.default_rng(1)
+    coords = rng.random((30, 2)).astype(np.float32)
+    section_id = np.zeros(30, dtype=np.int64)
+    edges = build_graph(coords, section_id, method="delaunay")
+    pair_set = set(map(tuple, edges.T.tolist()))
+    for u, v in pair_set:
+        assert (v, u) in pair_set, f"edge ({u},{v}) has no reverse ({v},{u})"
+
+
+def test_build_graph_delaunay_no_self_loops():
+    """Delaunay edges must not contain self-loops."""
+    rng = np.random.default_rng(2)
+    coords = rng.random((25, 2)).astype(np.float32)
+    section_id = np.zeros(25, dtype=np.int64)
+    edges = build_graph(coords, section_id, method="delaunay")
+    assert not np.any(edges[0] == edges[1]), "self-loop found in Delaunay edges"
+
+
+def test_build_graph_delaunay_no_cross_section_edges():
+    """Delaunay graph must not connect cells from different sections."""
+    rng = np.random.default_rng(3)
+    # Two sections spatially overlapping to stress-test section isolation.
+    coords_a = rng.random((15, 2)).astype(np.float32)
+    coords_b = rng.random((15, 2)).astype(np.float32)
+    coords = np.concatenate([coords_a, coords_b], axis=0)
+    section_id = np.array([0] * 15 + [1] * 15, dtype=np.int64)
+    edges = build_graph(coords, section_id, method="delaunay")
+    src_sections = section_id[edges[0]]
+    dst_sections = section_id[edges[1]]
+    assert np.all(src_sections == dst_sections), "cross-section edges found"
+
+
+def test_build_graph_delaunay_connected_triangulation():
+    """On a regular 5x5 grid the Delaunay graph must be connected (every node
+    reachable from every other via BFS on the undirected edges)."""
+    xs, ys = np.meshgrid(np.linspace(0, 1, 5), np.linspace(0, 1, 5))
+    coords = np.column_stack([xs.ravel(), ys.ravel()]).astype(np.float32)
+    section_id = np.zeros(len(coords), dtype=np.int64)
+    edges = build_graph(coords, section_id, method="delaunay")
+    # Build adjacency and BFS.
+    n = len(coords)
+    adj: dict[int, list[int]] = {i: [] for i in range(n)}
+    for u, v in edges.T.tolist():
+        adj[u].append(v)
+    visited = set()
+    queue = [0]
+    while queue:
+        node = queue.pop()
+        if node in visited:
+            continue
+        visited.add(node)
+        queue.extend(adj[node])
+    assert len(visited) == n, f"graph not connected; visited {len(visited)}/{n} nodes"
+
+
+def test_build_graph_delaunay_section_with_fewer_than_3_cells():
+    """Sections with < 3 cells cannot form a Delaunay simplex; they produce
+    no edges and do not raise."""
+    # 1-cell section and 2-cell section only.
+    coords = np.array([[0, 0], [1, 0], [5, 5]], dtype=np.float32)
+    section_id = np.array([0, 1, 1], dtype=np.int64)
+    edges = build_graph(coords, section_id, method="delaunay")
+    assert edges.shape == (2, 0)
+
+
+def test_build_graph_delaunay_multi_section():
+    """Two sections each with enough cells both contribute edges; no mixing."""
+    rng = np.random.default_rng(4)
+    coords_a = rng.random((10, 2)).astype(np.float32)
+    coords_b = rng.random((10, 2)).astype(np.float32) + 100.0  # far apart
+    coords = np.concatenate([coords_a, coords_b], axis=0)
+    section_id = np.array([0] * 10 + [1] * 10, dtype=np.int64)
+    edges = build_graph(coords, section_id, method="delaunay")
+    assert edges.shape[1] > 0
+    # All edges are within-section.
+    assert np.all(section_id[edges[0]] == section_id[edges[1]])
+
+
 def test_extract_subgraphs_batches_with_shared_adjacency():
     edges = np.array([[0, 1], [1, 2]], dtype=np.int64)
     got = extract_subgraphs(edges, [0, 2], k_hop=1)
