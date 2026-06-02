@@ -159,6 +159,29 @@ def morans_i(values: np.ndarray, edges: np.ndarray) -> float:
     return float((x.size / w) * np.sum(centered[src] * centered[dst]) / denom)
 
 
+def neighbor_label_agreement(labels: np.ndarray, edges: np.ndarray) -> float:
+    """Fraction of graph edges whose endpoints share a label (issue #53).
+
+    A sound, label-numbering-invariant measure of the spatial coherence of a
+    *categorical* field (e.g. ``prototype_id``). Moran's I instead treats the
+    nominal integer codes as a magnitude, so its value depends on the arbitrary
+    cluster numbering (which ``_kmeans`` assigns "in order of first appearance");
+    edge label-agreement does not. Returns ``NaN`` for an empty edge set.
+    """
+    lab = np.asarray(labels)
+    if edges.ndim != 2 or edges.shape[0] != 2:
+        raise ValueError(f"edges must be (2, n_edges); got {edges.shape}")
+    if edges.shape[1] == 0:
+        return float("nan")
+    src = edges[0]
+    dst = edges[1]
+    if src.size and (
+        src.min() < 0 or dst.min() < 0 or src.max() >= lab.size or dst.max() >= lab.size
+    ):
+        raise ValueError("edges contain indices outside labels")
+    return float(np.mean(lab[src] == lab[dst]))
+
+
 def section_overlap_rate(
     prototype_id: np.ndarray, section_id: np.ndarray, proto_kind: list[str]
 ) -> float:
@@ -234,6 +257,50 @@ def marker_recall_at_k(
     return float(np.mean(recalls))
 
 
+def proto_kind_accuracy(
+    pred_proto_kind: list[str],
+    true_proto_kind: list[str],
+    pred_prototype_id: np.ndarray,
+    true_prototype_id: np.ndarray,
+) -> float:
+    """Accuracy of predicted conserved/sample_specific tags vs truth (issue #53).
+
+    Hungarian-matches predicted prototypes to truth prototypes by cell overlap
+    (the same alignment :func:`score_against_truth` uses for markers), then
+    compares each matched pair's *predicted* ``proto_kind`` against the
+    *ground-truth* tag. Unlike :func:`section_overlap_rate` -- which re-derives
+    section coverage from the very ``prototype_id`` that produced ``proto_kind``
+    and is therefore ~1.0 by construction (a self-consistency check, not an
+    accuracy) -- this evaluates against the independent truth ``proto_kind``.
+
+    Returns ``NaN`` when there is nothing to score (no truth tags, no predicted
+    cells, or no overlap-matched pairs).
+    """
+    pred_id = np.asarray(pred_prototype_id, dtype=np.int64)
+    true_id = np.asarray(true_prototype_id, dtype=np.int64)
+    if not true_proto_kind or pred_id.size == 0 or true_id.size == 0:
+        return float("nan")
+    n_pred = int(pred_id.max()) + 1
+    n_true = int(true_id.max()) + 1
+    contingency = np.zeros((n_pred, n_true), dtype=np.int64)
+    np.add.at(contingency, (pred_id, true_id), 1)
+    row_ind, col_ind = linear_sum_assignment(-contingency)
+    correct = 0
+    total = 0
+    for p, t in zip(row_ind, col_ind):
+        if (
+            p >= len(pred_proto_kind)
+            or t >= len(true_proto_kind)
+            or contingency[p, t] == 0
+        ):
+            continue
+        total += 1
+        correct += int(pred_proto_kind[p] == true_proto_kind[t])
+    if total == 0:
+        return float("nan")
+    return float(correct / total)
+
+
 def score_against_truth(
     pred_prototype_id: np.ndarray,
     pred_marker_table: list[list[int]],
@@ -243,6 +310,7 @@ def score_against_truth(
     section_id: np.ndarray,
     edges: np.ndarray,
     k: int = 5,
+    true_proto_kind: list[str] | None = None,
 ) -> dict[str, float]:
     """Score model output against synthetic ground truth (issues #81/#82).
 
@@ -278,9 +346,11 @@ def score_against_truth(
         "homogeneity": homogeneity(pred_id, true_id),
         "completeness": completeness(pred_id, true_id),
         "v_measure": v_measure(pred_id, true_id),
-        "MoranI": morans_i(pred_id, edges),
-        "section_overlap_rate": section_overlap_rate(
-            pred_id, section_id, pred_proto_kind
+        "label_agreement": neighbor_label_agreement(pred_id, edges),
+        "proto_kind_accuracy": (
+            proto_kind_accuracy(pred_proto_kind, true_proto_kind, pred_id, true_id)
+            if true_proto_kind is not None
+            else float("nan")
         ),
         "marker_recall_at_k": marker_recall_at_k(
             aligned_pred_markers, true_marker_genes, k=k
