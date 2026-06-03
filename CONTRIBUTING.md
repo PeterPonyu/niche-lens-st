@@ -41,7 +41,7 @@ reference third-party baseline source. Before every PR:
 - Keep baseline provenance in `BASELINE_REFERENCES.md`; baseline checkout
   commands live in `baseline_repos/README.md` (third-party code is **not**
   vendored).
-- Any new baseline-method mention (e.g. CellNiche / scComm) must sit in a file
+- Any new baseline-method mention must sit in a file
   listed in [`docs/ALLOWED_BASELINE_CONTEXTS.md`](docs/ALLOWED_BASELINE_CONTEXTS.md);
   if it does not, update that allowlist as part of your change.
 

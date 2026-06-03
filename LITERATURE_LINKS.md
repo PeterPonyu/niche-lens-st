@@ -34,7 +34,7 @@ guessed DOI.
 - **⚠️ flags are intentional.** Where only a dataset page (not a paper DOI) is
   confirmed, the page is the citable source; resolve the exact paper DOI from the
   dataset's data-availability statement before manuscript use. No DOI is guessed.
-- **Baselines** (CellNiche, scComm) are tracked separately in
+- **Baselines** are tracked separately in
   [`BASELINE_REFERENCES.md`](BASELINE_REFERENCES.md), not here.
 - **Raw-count policy** (project-wide): raw integer count matrices + spatial
   metadata only — no FASTQ / WSI / normalized-only objects.

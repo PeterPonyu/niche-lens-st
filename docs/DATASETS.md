@@ -246,7 +246,7 @@ rather than a raw `ModuleNotFoundError`.
 
 ---
 
-## High-plex upgrades (newer / superior panels)
+## High-plex upgrades (newer / higher-plex panels)
 
 | Issue | Dataset | Platform | Why it upgrades the corpus | Raw-count artifact + geometry | Access |
 |-------|---------|----------|----------------------------|-------------------------------|--------|
