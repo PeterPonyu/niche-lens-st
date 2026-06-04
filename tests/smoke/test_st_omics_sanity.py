@@ -10,20 +10,10 @@ Not scRNA (flat, no spatial, only cell_type obs, lognorm X).
 from __future__ import annotations
 
 import numpy as np
+
 import pytest
 
-import anndata as ad
-
-# Import runner logic for the _load / looks_like used on real cards (via sys.path in other tests)
-import sys
-from pathlib import Path
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(_REPO_ROOT / "src"))
-# The script under test re-exports or defines the helpers we exercise.
-try:
-    import nichelens_st  # noqa
-except Exception:
-    pass
+ad = pytest.importorskip("anndata")
 
 
 def _tiny_niche_st_adata(n: int = 12, n_genes: int = 6, section_col: str = "slice_id", seed: int = 99) -> ad.AnnData:
@@ -50,7 +40,12 @@ def test_tiny_st_has_required_st_keys():
 def test_runner_looks_like_raw_on_tiny_st():
     """The _looks_like_raw_counts helper (used before norm in run_real) must accept our format."""
     # Re-exec the runner module to get the helper (matches pattern in test_run_real_niche_runner.py)
+    # Done inside the test so the module has no heavy side-effect imports at collection time.
     import importlib.util
+    from pathlib import Path
+    _REPO_ROOT = Path(__file__).resolve().parents[2]
+    import sys
+    sys.path.insert(0, str(_REPO_ROOT / "src"))
     _SCRIPT = _REPO_ROOT / "scripts" / "run_real_niche.py"
     spec = importlib.util.spec_from_file_location("run_real_niche", _SCRIPT)
     runner = importlib.util.module_from_spec(spec)
