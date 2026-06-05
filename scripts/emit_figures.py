@@ -112,6 +112,15 @@ def _detect_fallback(run_metadata_path: Optional[Path]) -> tuple[bool, str]:
         note = meta.get("_fallback_note", "")
         if note:
             return True, str(note)
+        # In-lane detection: the structured `_fallback_note` key is dropped by
+        # the byte-locked results_contract.write_results until META adds it, but
+        # the runner records the downsized-fallback marker in the free-text
+        # `notes` field (passed through by the contract). Detect it there.
+        if "dataset=fallback" in str(meta.get("notes", "")):
+            return True, (
+                "DOWNSIZED SINGLE-SECTION FALLBACK, NOT THE ATLAS-SCALE RUN "
+                "(detected via run_metadata.notes). Do NOT cite as atlas-scale results."
+            )
     except RuntimeError:
         pass
     return False, ""
@@ -273,7 +282,10 @@ def emit_scalability(
         # Exact key contract: missing field → None (NEVER fabricate 0).
         peak_rss_bytes = meta.get("peak_rss_bytes")
 
-        if meta.get("_fallback_note"):
+        # Same dual signal as _detect_fallback: structured key (dropped by the
+        # byte-locked contract until META adds it) OR the notes marker the
+        # runner writes for a downsized fallback (contract passthrough).
+        if meta.get("_fallback_note") or "dataset=fallback" in str(meta.get("notes", "")):
             is_fallback = True
 
         rows.append(
