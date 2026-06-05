@@ -6,7 +6,7 @@ spatial graph, and *same* downstream clustering / metrics (see issue #152). They
 are clean-room implementations of well-known ideas -- no external package code is
 copied and no method brand names are used.
 
-Two embeddings are provided:
+Three embeddings are provided:
 
 * :func:`neighborhood_augmented_embedding` -- the standard neighborhood-
   augmentation idea: blend each cell's own expression with the average
@@ -15,10 +15,15 @@ Two embeddings are provided:
   features recovers niches better than clustering raw expression. The blend
   weight ``alpha`` and neighbor count ``k`` are explicit; ``alpha == 0`` or
   ``k == 0`` reduces the embedding to the non-augmented (self-only) features.
+* :func:`spatial_diffusion_embedding` -- multi-step iterated graph smoothing:
+  apply the single-step neighborhood blend ``n_steps`` times on the same
+  per-section k-NN graph. The ``n_steps == 1`` case is identical to
+  :func:`neighborhood_augmented_embedding`; larger ``n_steps`` produces stronger
+  spatial denoising at the cost of more blur.
 * :func:`pca_embedding` -- a thin, seeded PCA-of-expression baseline matching the
   existing intrinsic ``pca_baseline_silhouette`` reference.
 
-Both feed :func:`assign_prototypes`, which reuses the model's deterministic
+All three feed :func:`assign_prototypes`, which reuses the model's deterministic
 spherical k-means (:func:`nichelens_st.model._kmeans`) so every method shares the
 identical prototype-assignment step. Everything here is pure ``numpy`` / ``scipy``
 (the spatial graph is built with :func:`nichelens_st.graph.build_graph`, which
@@ -109,6 +114,55 @@ def neighborhood_augmented_embedding(
     return (1.0 - alpha) * Xa + alpha * nbr_mean
 
 
+def spatial_diffusion_embedding(
+    X: np.ndarray,
+    coords: np.ndarray,
+    *,
+    k: int = 8,
+    n_steps: int = 3,
+    alpha: float = 0.5,
+    section_id: np.ndarray | None = None,
+) -> np.ndarray:
+    """Iterated spatial-graph diffusion embedding.
+
+    Repeatedly blends each cell's features with its k spatial-neighbor average
+    ``n_steps`` times on the same per-section k-NN graph
+    (:func:`nichelens_st.graph.build_graph`). This is the multi-step
+    generalisation of :func:`neighborhood_augmented_embedding` (the
+    ``n_steps == 1`` case) -- a stronger spatial denoiser that converges
+    toward the per-niche mean as ``n_steps`` grows.
+
+    Reduction properties (verified by the tests):
+
+    * ``n_steps == 0`` returns ``X`` exactly (no diffusion applied).
+    * ``alpha == 0`` returns ``X`` exactly (zero blend weight at every step).
+    * ``k == 0`` returns ``X`` exactly (no neighbors -> neighbor mean is self).
+    * ``n_steps == 1`` returns the same array as
+      :func:`neighborhood_augmented_embedding` with the same ``k`` and ``alpha``.
+
+    Validates ``alpha in [0, 1]``, ``n_steps >= 0``, and ``k >= 0`` with
+    :class:`ValueError`, matching the convention of the sibling baselines.
+    Pure ``numpy`` / ``scipy`` and fully deterministic. Returns a
+    ``(n_cells, n_genes)`` float64 array.
+    """
+    if not 0.0 <= alpha <= 1.0:
+        raise ValueError(f"alpha must be in [0, 1]; got {alpha}")
+    if n_steps < 0:
+        raise ValueError(f"n_steps must be non-negative; got {n_steps}")
+    if k < 0:
+        raise ValueError(f"k must be non-negative; got {k}")
+    Xa = np.asarray(X, dtype=np.float64)
+    if n_steps == 0 or alpha == 0.0 or k == 0:
+        return Xa.copy()
+    result = Xa
+    for _ in range(n_steps):
+        nbr_mean = neighborhood_averaged_features(
+            result, coords, k=k, section_id=section_id
+        )
+        result = (1.0 - alpha) * result + alpha * nbr_mean
+    return result
+
+
 def pca_embedding(
     X: np.ndarray, *, n_components: int = 32, seed: int = 0
 ) -> np.ndarray:
@@ -162,6 +216,7 @@ def assign_prototypes(
 __all__ = [
     "neighborhood_averaged_features",
     "neighborhood_augmented_embedding",
+    "spatial_diffusion_embedding",
     "pca_embedding",
     "assign_prototypes",
 ]

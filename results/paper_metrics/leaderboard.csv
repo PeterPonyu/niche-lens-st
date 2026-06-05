@@ -1,0 +1,4 @@
+# dataset_card_id: niche_merfish_slice
+# WARNING: SINGLE-SECTION FALLBACK DATA — NOT the 124k-cell atlas run. Do NOT cite as atlas-scale result.
+method,domain_ari,domain_ami,domain_nmi,domain_macro_f1,domain_homogeneity,domain_accuracy,embedding_silhouette,niche_morans_i
+niche-lens-st,0.1685,0.2648,0.2669,0.3525,0.2962,0.4012,0.1719,0.5335
