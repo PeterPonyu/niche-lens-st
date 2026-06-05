@@ -59,6 +59,14 @@ LEADERBOARD_COLS: tuple[str, ...] = (
 _FLOAT_FMT = ".4f"
 _NA = "NA"
 
+#: Warning synthesized when fallback is detected only via the free-text `notes`
+#: field (the structured `_fallback_note` key is dropped by the byte-locked
+#: results_contract until META adds it as a passthrough field).
+_NOTES_FALLBACK_WARNING = (
+    "DOWNSIZED SINGLE-SECTION FALLBACK, NOT THE ATLAS-SCALE RUN "
+    "(detected via run_metadata.notes). Do NOT cite as atlas-scale results."
+)
+
 
 # ---------------------------------------------------------------------------
 # JSON I/O helpers
@@ -110,6 +118,14 @@ def _detect_fallback(metrics_path: Path) -> tuple[bool, str]:
             note = meta.get("_fallback_note", "")
             if note:
                 return True, str(note)
+            # In-lane detection: the structured `_fallback_note` key is dropped
+            # by the byte-locked results_contract.write_results (fixed schema)
+            # until META adds it, but the runner records the downsized-fallback
+            # marker in the free-text `notes` field, which the contract DOES
+            # pass through. Detect it there so a freshly-regenerated artifact
+            # still carries the "not the atlas run" warning.
+            if "dataset=fallback" in str(meta.get("notes", "")):
+                return True, _NOTES_FALLBACK_WARNING
         except RuntimeError:
             pass
     return False, ""

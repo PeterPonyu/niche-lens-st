@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "dataset_card_id": "niche_merfish_slice",
-  "source_sha256": "68e30f20a9da9951eb8ee4a34c4ea2efab85f7e89db099ac449b33fca6037eea",
+  "source_sha256": "b6c643f093968a3ebe9f4006a9782e3766271cb6c38b77137efb41f71a5a2ee3",
   "columns": [
     "domain_ari",
     "domain_ami",
@@ -13,31 +13,94 @@
     "niche_morans_i"
   ],
   "paper_claim_ready": false,
-  "fallback_warning": "DOWNSIZED SINGLE-SECTION FALLBACK, NOT THE ATLAS-SCALE RUN. These results are from a 5,488-cell single MERFISH section, used because the primary 124k-cell atlas run is OOM-infeasible (it requires a 232.60 GiB CUDA allocation on a 23.40 GiB GPU; see `notes` below). Being single-section, the conserved/sample-specific distinction is degenerate (slice_id has 1 level) and conserved_fraction must NOT be cited. Do NOT cite these numbers as the 124k atlas-scale result; no manuscript claim depends on the atlas run (manuscript/DRAFT.md keeps all biological/performance claims 'planned').",
+  "fallback_warning": "DOWNSIZED SINGLE-SECTION FALLBACK, NOT THE ATLAS-SCALE RUN (detected via run_metadata.notes). Do NOT cite as atlas-scale results.",
   "rows": [
     {
       "method": "niche-lens-st",
       "metrics": {
-        "domain_ari": 0.16846787098989746,
-        "domain_ami": 0.26484359063042673,
-        "domain_nmi": 0.2668874882255693,
-        "domain_macro_f1": 0.3524853263548028,
-        "domain_homogeneity": 0.29616989592944537,
-        "domain_accuracy": 0.4012390670553936,
-        "embedding_silhouette": 0.17188173532485962,
-        "niche_morans_i": 0.5334526302540362
+        "domain_ari": 0.17249793378650613,
+        "domain_ami": 0.2902825185571234,
+        "domain_nmi": 0.2922507614918338,
+        "domain_macro_f1": 0.362934343236626,
+        "domain_homogeneity": 0.3250691558214125,
+        "domain_accuracy": 0.4037900874635568,
+        "embedding_silhouette": 0.24258270859718323,
+        "niche_morans_i": 0.4229928376898637
       },
       "source_path": "/home/zeyufu/Desktop/labs/active/spatial-omics-reform/niche-lens-st/results/niche-lens-st/metrics.json",
-      "git_sha": "c00a510",
+      "git_sha": "7b7534d",
+      "dataset_card_id": "niche_merfish_slice"
+    },
+    {
+      "method": "diffusion",
+      "metrics": {
+        "domain_ari": null,
+        "domain_ami": null,
+        "domain_nmi": null,
+        "domain_macro_f1": null,
+        "domain_homogeneity": null,
+        "domain_accuracy": null,
+        "embedding_silhouette": 0.10714580252866204,
+        "niche_morans_i": 0.8239733325460025
+      },
+      "source_path": "/home/zeyufu/Desktop/labs/active/spatial-omics-reform/niche-lens-st/results/baselines/diffusion/niche-lens-st/metrics.json",
+      "git_sha": "06cfcbf",
+      "dataset_card_id": "niche_merfish_slice"
+    },
+    {
+      "method": "neighborhood",
+      "metrics": {
+        "domain_ari": null,
+        "domain_ami": null,
+        "domain_nmi": null,
+        "domain_macro_f1": null,
+        "domain_homogeneity": null,
+        "domain_accuracy": null,
+        "embedding_silhouette": 0.09561614531556198,
+        "niche_morans_i": 0.4214128273940308
+      },
+      "source_path": "/home/zeyufu/Desktop/labs/active/spatial-omics-reform/niche-lens-st/results/baselines/neighborhood/niche-lens-st/metrics.json",
+      "git_sha": "06cfcbf",
+      "dataset_card_id": "niche_merfish_slice"
+    },
+    {
+      "method": "pca",
+      "metrics": {
+        "domain_ari": null,
+        "domain_ami": null,
+        "domain_nmi": null,
+        "domain_macro_f1": null,
+        "domain_homogeneity": null,
+        "domain_accuracy": null,
+        "embedding_silhouette": 0.1568460356148118,
+        "niche_morans_i": 0.27094300382576014
+      },
+      "source_path": "/home/zeyufu/Desktop/labs/active/spatial-omics-reform/niche-lens-st/results/baselines/pca/niche-lens-st/metrics.json",
+      "git_sha": "06cfcbf",
       "dataset_card_id": "niche_merfish_slice"
     }
   ],
   "provenance": {
     "niche-lens-st": {
       "source_path": "/home/zeyufu/Desktop/labs/active/spatial-omics-reform/niche-lens-st/results/niche-lens-st/metrics.json",
-      "git_sha": "c00a510",
+      "git_sha": "7b7534d",
       "dataset_card_id": "niche_merfish_slice",
-      "source_sha256": "68e30f20a9da9951eb8ee4a34c4ea2efab85f7e89db099ac449b33fca6037eea"
+      "source_sha256": "b6c643f093968a3ebe9f4006a9782e3766271cb6c38b77137efb41f71a5a2ee3"
+    },
+    "diffusion": {
+      "source_path": "/home/zeyufu/Desktop/labs/active/spatial-omics-reform/niche-lens-st/results/baselines/diffusion/niche-lens-st/metrics.json",
+      "git_sha": "06cfcbf",
+      "dataset_card_id": "niche_merfish_slice"
+    },
+    "neighborhood": {
+      "source_path": "/home/zeyufu/Desktop/labs/active/spatial-omics-reform/niche-lens-st/results/baselines/neighborhood/niche-lens-st/metrics.json",
+      "git_sha": "06cfcbf",
+      "dataset_card_id": "niche_merfish_slice"
+    },
+    "pca": {
+      "source_path": "/home/zeyufu/Desktop/labs/active/spatial-omics-reform/niche-lens-st/results/baselines/pca/niche-lens-st/metrics.json",
+      "git_sha": "06cfcbf",
+      "dataset_card_id": "niche_merfish_slice"
     }
   }
 }
