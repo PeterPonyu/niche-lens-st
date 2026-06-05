@@ -6,6 +6,7 @@ from math import comb
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment
+from scipy.special import gammaln as _lgamma
 
 
 def adjusted_rand(pred_id: np.ndarray, true_id: np.ndarray) -> float:
@@ -81,6 +82,101 @@ def _conditional_entropy(table: np.ndarray, n: int, *, given_rows: bool) -> floa
         np.float64
     )
     return float(-np.sum((nij / n) * (np.log(nij) - np.log(marginal))))
+
+
+def _expected_mutual_info(table: np.ndarray, n: int) -> float:
+    """Expected MI under the hypergeometric permutation model (Vinh et al. 2010).
+
+    Matches sklearn's ``expected_mutual_information`` with
+    ``average_method='max'``.  Vectorised over ``n_ij`` values per (i, j) pair
+    via ``scipy.special.gammaln``; no Python triple-loop.
+    """
+    a = table.sum(axis=1).astype(np.float64)  # pred marginals
+    b = table.sum(axis=0).astype(np.float64)  # true marginals
+    emi = 0.0
+    for ai in a:
+        for bj in b:
+            nij_min = max(1, int(ai + bj) - n)
+            nij_max = min(int(ai), int(bj))
+            if nij_min > nij_max:
+                continue
+            nij = np.arange(nij_min, nij_max + 1, dtype=np.float64)
+            # log hypergeometric PMF: log P(X = nij | N, ai, bj)
+            log_p = (
+                _lgamma(ai + 1) - _lgamma(nij + 1) - _lgamma(ai - nij + 1)
+                + _lgamma(n - ai + 1) - _lgamma(bj - nij + 1) - _lgamma(n - ai - bj + nij + 1)
+                - _lgamma(n + 1) + _lgamma(bj + 1) + _lgamma(n - bj + 1)
+            )
+            mi_terms = (nij / n) * (np.log(n) + np.log(nij) - np.log(ai) - np.log(bj))
+            emi += float(np.sum(np.exp(log_p) * mi_terms))
+    return emi
+
+
+def adjusted_mutual_info(pred_id: np.ndarray, true_id: np.ndarray) -> float:
+    """Adjusted Mutual Information with max-normalisation (issue #312).
+
+    ``AMI = (MI - E[MI]) / (max(H_pred, H_true) - E[MI])`` where ``E[MI]``
+    is the Vinh et al. (2010) hypergeometric expectation — the same quantity
+    that ``sklearn.metrics.adjusted_mutual_info_score(average_method='max')``
+    computes.
+
+    Returns ``NaN`` when undefined: ``n < 2``, or both partitions degenerate
+    to a single cluster (denominator 0), mirroring :func:`adjusted_rand`.
+    Can be slightly negative for independent labelings.
+    """
+    pred = np.asarray(pred_id)
+    true = np.asarray(true_id)
+    if pred.shape != true.shape:
+        raise ValueError(f"pred_id and true_id shapes differ: {pred.shape} != {true.shape}")
+    table, n = _contingency(pred, true)
+    if n < 2:
+        return float("nan")
+    h_pred = _entropy(table.sum(axis=1), n)
+    h_true = _entropy(table.sum(axis=0), n)
+    mi = h_true - _conditional_entropy(table, n, given_rows=True)
+    emi = _expected_mutual_info(table, n)
+    denom = max(h_pred, h_true) - emi
+    if denom == 0.0:
+        return float("nan")
+    return float((mi - emi) / denom)
+
+
+def macro_f1(pred_id: np.ndarray, true_id: np.ndarray) -> float:
+    """Clustering macro-F1 with Hungarian alignment (issue #312).
+
+    Hungarian-aligns predicted clusters to true classes via contingency
+    overlap (same as :func:`proto_kind_accuracy`), then computes per-true-class
+    ``F1 = 2*TP / (2*TP + FP + FN)`` and averages **unweighted** over all true
+    classes.  Unmatched true classes contribute ``F1 = 0``.
+
+    Returns ``NaN`` for empty input, consistent with the module's issue-#83
+    NaN policy.
+    """
+    pred = np.asarray(pred_id)
+    true = np.asarray(true_id)
+    if pred.shape != true.shape:
+        raise ValueError(f"pred_id and true_id shapes differ: {pred.shape} != {true.shape}")
+    table, n = _contingency(pred, true)
+    if n == 0:
+        return float("nan")
+    a = table.sum(axis=1)  # pred cluster sizes
+    b = table.sum(axis=0)  # true class sizes
+    n_true = table.shape[1]
+    row_ind, col_ind = linear_sum_assignment(-table)
+    # Map: true-class index → matched pred-cluster index
+    true_to_pred = {int(t): int(p) for p, t in zip(row_ind, col_ind)}
+    f1_scores = []
+    for j in range(n_true):
+        i = true_to_pred.get(j)
+        if i is None:
+            f1_scores.append(0.0)
+            continue
+        tp = float(table[i, j])
+        fp = float(a[i] - tp)
+        fn = float(b[j] - tp)
+        denom = 2.0 * tp + fp + fn
+        f1_scores.append(2.0 * tp / denom if denom > 0.0 else 0.0)
+    return float(np.mean(f1_scores))
 
 
 def homogeneity(pred_id: np.ndarray, true_id: np.ndarray) -> float:
