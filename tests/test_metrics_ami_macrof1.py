@@ -59,8 +59,30 @@ def test_ami_mismatched_shapes_raises():
         adjusted_mutual_info(np.array([0, 1]), np.array([0]))
 
 
+def test_ami_known_value_regression():
+    """AMI exact value for a fixed 3x3 case, anchored to sklearn.
+
+    The expected value was cross-checked against
+    ``sklearn.metrics.adjusted_mutual_info_score(true, pred, average_method='max')``
+    (== 0.31967265056964705). Pinned here as a sklearn-free regression guard so
+    CI — where sklearn is not installed — still validates the hypergeometric
+    E[MI] adjustment, not just the perfect/independent limits.
+    """
+    pred = np.array([0, 0, 0, 1, 1, 1, 2, 2])
+    true = np.array([0, 0, 1, 1, 1, 2, 2, 2])
+    assert adjusted_mutual_info(pred, true) == pytest.approx(
+        0.31967265056964705, abs=1e-9
+    )
+
+
 def test_ami_sklearn_cross_check():
-    """AMI matches sklearn (average_method='max') within 1e-9 on random labelings."""
+    """AMI matches sklearn (average_method='max') within 1e-9 on random labelings.
+
+    Skipped where sklearn is absent (e.g. CI) — sklearn is not a src/ or test
+    dependency; :func:`test_ami_known_value_regression` covers the exact value
+    without it. This test adds breadth (random labelings) where sklearn exists.
+    """
+    pytest.importorskip("sklearn")
     from sklearn.metrics import adjusted_mutual_info_score  # cross-check only
 
     rng = np.random.default_rng(42)
