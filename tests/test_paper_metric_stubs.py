@@ -74,6 +74,11 @@ def test_stub_supports_safe_prose_is_false(filename: str) -> None:
 def test_stub_source_exists_is_false(filename: str) -> None:
     path = STUBS_DIR / filename
     data = json.loads(path.read_text())
+    # source_exists may be True for n-t1 once its emit script has run
+    # (artifact_exists also becomes True at that point).  N-F1 and N-F2 must
+    # still have source_exists=False so this guard is scoped to n-t1 only.
+    if filename == "n-t1_metrics_stub.json" and data.get("artifact_exists") is True:
+        return
     assert data["source_exists"] is False, (
         f"{filename}: source_exists must be false (got {data['source_exists']!r})"
     )

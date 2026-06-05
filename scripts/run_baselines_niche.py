@@ -131,6 +131,7 @@ def compute_embedding(
     alpha: float,
     n_components: int,
     seed: int,
+    n_steps: int = 3,
 ) -> np.ndarray:
     """Dispatch to the requested baseline embedding (pure numpy/scipy)."""
     from nichelens_st import baselines
@@ -141,7 +142,13 @@ def compute_embedding(
         )
     if baseline == "pca":
         return baselines.pca_embedding(X, n_components=n_components, seed=seed)
-    raise ValueError(f"unknown baseline {baseline!r}; expected 'neighborhood' or 'pca'")
+    if baseline == "diffusion":
+        return baselines.spatial_diffusion_embedding(
+            X, coords, k=k, n_steps=n_steps, alpha=alpha, section_id=section_id
+        )
+    raise ValueError(
+        f"unknown baseline {baseline!r}; expected 'neighborhood', 'pca', or 'diffusion'"
+    )
 
 
 def baseline_intrinsic_metrics(
@@ -218,6 +225,7 @@ def run_baseline(
     n_prototypes: int,
     n_components: int,
     seed: int,
+    n_steps: int = 3,
 ):
     """Compute embedding -> prototypes -> intrinsic metrics for one baseline.
 
@@ -237,6 +245,7 @@ def run_baseline(
         alpha=alpha,
         n_components=n_components,
         seed=seed,
+        n_steps=n_steps,
     )
     prototype_id = baselines.assign_prototypes(
         embedding, n_clusters=n_prototypes, seed=seed
@@ -254,7 +263,9 @@ def _build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--baseline", choices=("neighborhood", "pca"), default="neighborhood"
+        "--baseline",
+        choices=("neighborhood", "pca", "diffusion"),
+        default="neighborhood",
     )
     parser.add_argument(
         "--k", type=int, default=8, help="Spatial neighbors for the neighborhood blend."
@@ -264,6 +275,12 @@ def _build_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.5,
         help="Neighborhood blend weight in [0, 1]; 0 -> non-augmented self features.",
+    )
+    parser.add_argument(
+        "--n-steps",
+        type=int,
+        default=3,
+        help="Diffusion steps (ignored for neighborhood/pca baselines).",
     )
     parser.add_argument("--n-prototypes", type=int, default=N_PROTOTYPES)
     parser.add_argument("--n-components", type=int, default=N_COMPONENTS)
@@ -312,6 +329,7 @@ def main() -> int:
         n_prototypes=args.n_prototypes,
         n_components=args.n_components,
         seed=args.seed,
+        n_steps=args.n_steps,
     )
     elapsed = time.time() - t0
 
@@ -322,6 +340,10 @@ def main() -> int:
         notes.append(f"alpha={args.alpha}")
     elif args.baseline == "pca":
         notes.append(f"n_components={args.n_components}")
+    elif args.baseline == "diffusion":
+        notes.append(f"k={args.k}")
+        notes.append(f"alpha={args.alpha}")
+        notes.append(f"n_steps={args.n_steps}")
     notes.append(f"section_id source: {section_col or 'single-section zeros'}")
     notes.append(f"runtime_s={elapsed:.2f}")
 
@@ -351,10 +373,26 @@ def main() -> int:
                     "neighborhood-augmented expression (self + k-NN neighbor "
                     "average), spherical k-means prototypes"
                     if args.baseline == "neighborhood"
-                    else "PCA-of-expression, spherical k-means prototypes"
+                    else (
+                        f"iterated spatial-graph diffusion (n_steps={args.n_steps} "
+                        "k-NN blends), spherical k-means prototypes"
+                        if args.baseline == "diffusion"
+                        else "PCA-of-expression, spherical k-means prototypes"
+                    )
                 ),
-                "blend_alpha": (float(args.alpha) if args.baseline == "neighborhood" else None),
-                "neighbors_k": (int(args.k) if args.baseline == "neighborhood" else None),
+                "blend_alpha": (
+                    float(args.alpha)
+                    if args.baseline in ("neighborhood", "diffusion")
+                    else None
+                ),
+                "neighbors_k": (
+                    int(args.k)
+                    if args.baseline in ("neighborhood", "diffusion")
+                    else None
+                ),
+                "n_diffusion_steps": (
+                    int(args.n_steps) if args.baseline == "diffusion" else None
+                ),
                 "caveats": [
                     "license-clean clean-room baseline; not an external package"
                 ],

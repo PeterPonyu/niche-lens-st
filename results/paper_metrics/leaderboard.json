@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_card_id": "niche_merfish_slice",
+  "source_sha256": "68e30f20a9da9951eb8ee4a34c4ea2efab85f7e89db099ac449b33fca6037eea",
+  "columns": [
+    "domain_ari",
+    "domain_ami",
+    "domain_nmi",
+    "domain_macro_f1",
+    "domain_homogeneity",
+    "domain_accuracy",
+    "embedding_silhouette",
+    "niche_morans_i"
+  ],
+  "paper_claim_ready": false,
+  "fallback_warning": "DOWNSIZED SINGLE-SECTION FALLBACK, NOT THE ATLAS-SCALE RUN. These results are from a 5,488-cell single MERFISH section, used because the primary 124k-cell atlas run is OOM-infeasible (it requires a 232.60 GiB CUDA allocation on a 23.40 GiB GPU; see `notes` below). Being single-section, the conserved/sample-specific distinction is degenerate (slice_id has 1 level) and conserved_fraction must NOT be cited. Do NOT cite these numbers as the 124k atlas-scale result; no manuscript claim depends on the atlas run (manuscript/DRAFT.md keeps all biological/performance claims 'planned').",
+  "rows": [
+    {
+      "method": "niche-lens-st",
+      "metrics": {
+        "domain_ari": 0.16846787098989746,
+        "domain_ami": 0.26484359063042673,
+        "domain_nmi": 0.2668874882255693,
+        "domain_macro_f1": 0.3524853263548028,
+        "domain_homogeneity": 0.29616989592944537,
+        "domain_accuracy": 0.4012390670553936,
+        "embedding_silhouette": 0.17188173532485962,
+        "niche_morans_i": 0.5334526302540362
+      },
+      "source_path": "/home/zeyufu/Desktop/labs/active/spatial-omics-reform/niche-lens-st/results/niche-lens-st/metrics.json",
+      "git_sha": "c00a510",
+      "dataset_card_id": "niche_merfish_slice"
+    }
+  ],
+  "provenance": {
+    "niche-lens-st": {
+      "source_path": "/home/zeyufu/Desktop/labs/active/spatial-omics-reform/niche-lens-st/results/niche-lens-st/metrics.json",
+      "git_sha": "c00a510",
+      "dataset_card_id": "niche_merfish_slice",
+      "source_sha256": "68e30f20a9da9951eb8ee4a34c4ea2efab85f7e89db099ac449b33fca6037eea"
+    }
+  }
+}
