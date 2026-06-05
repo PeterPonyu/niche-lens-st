@@ -31,6 +31,7 @@ Flags:
 from __future__ import annotations
 
 import argparse
+import inspect
 import os
 import sys
 import time
@@ -128,6 +129,72 @@ def _to_dense_float32(X) -> np.ndarray:
     if sp.issparse(X):
         X = X.toarray()
     return np.ascontiguousarray(np.asarray(X), dtype=np.float32)
+
+
+# Conservative MERFISH count-QC floor (operator-overridable via the CLI). The
+# primary processed GSE282124 AnnData had NO QC filtering -- 76.18% of its cells
+# carry 0 transcript counts, so ``normalize_total`` divides by zero on those rows
+# -> NaN, which poisons the contrastive fit. We drop low-quality cells from the
+# RAW counts BEFORE normalization so the divide-by-zero never happens.
+DEFAULT_MIN_COUNTS = 10
+DEFAULT_MIN_GENES = 5
+# Refuse to fit on near-nothing; warn loudly when QC removes most of the input.
+QC_MIN_CELLS = 100
+QC_LOUD_DROP_FRACTION = 0.5
+
+
+def qc_cell_mask(counts_matrix, *, min_counts: int, min_genes: int) -> np.ndarray:
+    """Boolean keep-mask for count-based per-cell QC (pure; scanpy-free).
+
+    Computes per-cell total counts and per-cell n_genes-detected from the RAW
+    counts ``counts_matrix`` (scipy.sparse OR dense; int-like or float-stored
+    counts) and keeps a cell iff BOTH:
+
+    * ``total_counts >= min_counts`` and
+    * ``n_genes_detected >= min_genes``
+
+    ``>=`` semantics: a cell exactly AT a threshold is KEPT; only strictly-below
+    is dropped. An all-zero matrix returns an all-``False`` mask (the caller then
+    aborts rather than fitting on nothing). Returns a 1-D ``bool`` ndarray of
+    length ``counts_matrix.shape[0]``.
+    """
+    import scipy.sparse as sp
+
+    if sp.issparse(counts_matrix):
+        csr = counts_matrix.tocsr()
+        total_counts = np.asarray(csr.sum(axis=1)).reshape(-1)
+        # n_genes-detected = nonzeros per row (works on the sparse structure).
+        n_genes = np.asarray((csr != 0).sum(axis=1)).reshape(-1)
+    else:
+        arr = np.asarray(counts_matrix)
+        total_counts = np.asarray(arr.sum(axis=1)).reshape(-1)
+        n_genes = np.asarray((arr != 0).sum(axis=1)).reshape(-1)
+
+    keep = (total_counts >= float(min_counts)) & (n_genes >= int(min_genes))
+    return np.ascontiguousarray(keep, dtype=bool).reshape(-1)
+
+
+def qc_note_string(
+    *, min_counts: int, min_genes: int, n_before: int, n_after: int
+) -> str:
+    """Render the run_metadata NOTES fragment recording the QC outcome.
+
+    The contract passes the free-text ``notes`` string through verbatim, so this
+    is how the QC provenance (thresholds + before/after/dropped counts) reaches
+    the manifest. Format::
+
+        qc: min_counts=<x>, min_genes=<y>, n_before=<N0>, n_after=<N1>,
+        n_dropped=<d> (<pct>% dropped)
+    """
+    n_before = int(n_before)
+    n_after = int(n_after)
+    n_dropped = n_before - n_after
+    pct = (100.0 * n_dropped / n_before) if n_before else 0.0
+    return (
+        f"qc: min_counts={int(min_counts)}, min_genes={int(min_genes)}, "
+        f"n_before={n_before}, n_after={n_after}, n_dropped={n_dropped} "
+        f"({pct:.1f}% dropped)"
+    )
 
 
 # Section/sample column autodetect order + the tiling-artifact heuristic (#343).
@@ -254,18 +321,63 @@ def _peak_rss_bytes():
         return None
 
 
-def _load_dataset(path: Path, already_normalized: bool, section_col_arg="auto"):
-    """Load an AnnData, cast X to float32, conditionally log1p, build inputs.
+def _load_dataset(
+    path: Path,
+    already_normalized: bool,
+    section_col_arg="auto",
+    *,
+    min_counts: int = DEFAULT_MIN_COUNTS,
+    min_genes: int = DEFAULT_MIN_GENES,
+):
+    """Load an AnnData, QC-filter, cast X to float32, conditionally log1p.
 
     Returns (X float32 dense, coords float32, section_id int64, section_col_used,
     normalization dict, n_obs, n_vars, adata). The section-resolution note (if
     any -- e.g. the tiling-artifact warning) is stashed on
     ``adata.uns['_section_note']`` so callers can record it without widening this
-    return tuple.
+    return tuple; the QC summary is likewise stashed on ``adata.uns['_qc_note']``.
+
+    Count-based QC (computed from the RAW counts, BEFORE normalization) drops
+    cells with ``total_counts < min_counts`` OR ``n_genes_detected < min_genes``.
+    This removes the zero-count cells whose ``normalize_total`` divide-by-zero
+    would otherwise produce NaN rows that poison the fit. The same keep-mask is
+    applied to the AnnData (and therefore X, coords, and section_id, which are
+    derived AFTER filtering), and ``n_obs`` is re-derived from the filtered data.
     """
     import scanpy as sc
 
     adata = sc.read_h5ad(str(path))
+    n_before = int(adata.shape[0])
+
+    # Count-based QC on the RAW counts, BEFORE normalization (so the
+    # divide-by-zero on empty cells never happens). The mask is applied to the
+    # AnnData itself, so X / coords / section_id below are all derived from the
+    # filtered cells and stay aligned.
+    keep = qc_cell_mask(adata.X, min_counts=min_counts, min_genes=min_genes)
+    n_after = int(keep.sum())
+    qc_note = qc_note_string(
+        min_counts=min_counts,
+        min_genes=min_genes,
+        n_before=n_before,
+        n_after=n_after,
+    )
+    if n_before and (n_before - n_after) > QC_LOUD_DROP_FRACTION * n_before:
+        warnings.warn(
+            f"QC dropped >{int(QC_LOUD_DROP_FRACTION * 100)}% of cells "
+            f"({qc_note}); the input is mostly empty cells -- inspect the "
+            "upstream processing.",
+            UserWarning,
+            stacklevel=2,
+        )
+    # Abort only when QC actually removed cells and the survivors are too few to
+    # fit (don't penalize a legitimately small input that passes QC untouched).
+    if n_after < n_before and n_after < QC_MIN_CELLS:
+        raise ValueError(
+            f"QC left {n_after} cells (< {QC_MIN_CELLS}); refusing to fit on "
+            f"near-nothing. {qc_note}. Loosen --min-counts / --min-genes or "
+            "check the upstream processing for this dataset."
+        )
+    adata = adata[keep].copy()
     n_obs, n_vars = int(adata.shape[0]), int(adata.shape[1])
 
     # Conditional normalization (plan §4.4 step 1): for count-like input
@@ -294,8 +406,9 @@ def _load_dataset(path: Path, already_normalized: bool, section_col_arg="auto"):
         n_obs,
         section_col_arg=section_col_arg,
     )
-    # Carry the note out without widening the return tuple (#343).
+    # Carry the notes out without widening the return tuple (#343).
     adata.uns["_section_note"] = section_note
+    adata.uns["_qc_note"] = qc_note
 
     normalization = {"applied": applied, "method": method}
     return (
@@ -539,6 +652,27 @@ def _build_parser() -> argparse.ArgumentParser:
             "explicit obs column name (errors if absent)."
         ),
     )
+    parser.add_argument(
+        "--min-counts",
+        type=int,
+        default=DEFAULT_MIN_COUNTS,
+        help=(
+            "Per-cell total-count QC floor: cells with fewer total transcript "
+            f"counts are dropped BEFORE normalization (default {DEFAULT_MIN_COUNTS}, "
+            "a conservative MERFISH floor). The primary GSE282124 input had 76% "
+            "zero-count cells whose normalize_total divide-by-zero produced NaN "
+            "rows that poisoned the fit; this removes them."
+        ),
+    )
+    parser.add_argument(
+        "--min-genes",
+        type=int,
+        default=DEFAULT_MIN_GENES,
+        help=(
+            "Per-cell n_genes-detected QC floor: cells expressing fewer distinct "
+            f"genes are dropped BEFORE normalization (default {DEFAULT_MIN_GENES})."
+        ),
+    )
     parser.add_argument("--max-seconds", type=float, default=DEFAULT_MAX_SECONDS)
     parser.add_argument(
         "--batch-size",
@@ -589,6 +723,18 @@ def main() -> int:
     seed = 0
 
     def run_on(path: Path, label: str):
+        # Thread the QC thresholds only when the (possibly monkeypatched)
+        # _load_dataset accepts them, so legacy test stubs with the older
+        # 3-arg signature keep working without change.
+        load_kwargs = {}
+        try:
+            _params = inspect.signature(_load_dataset).parameters
+        except (TypeError, ValueError):
+            _params = {}
+        if "min_counts" in _params:
+            load_kwargs["min_counts"] = args.min_counts
+        if "min_genes" in _params:
+            load_kwargs["min_genes"] = args.min_genes
         (
             X,
             coords,
@@ -598,8 +744,14 @@ def main() -> int:
             n_obs,
             n_vars,
             adata,
-        ) = _load_dataset(path, args.already_normalized, args.section_col)
+        ) = _load_dataset(
+            path,
+            args.already_normalized,
+            args.section_col,
+            **load_kwargs,
+        )
         section_note = adata.uns.get("_section_note")
+        qc_note = adata.uns.get("_qc_note")
         result, edges, elapsed, eff_batch = _fit_with_walls(
             X,
             coords,
@@ -617,6 +769,7 @@ def main() -> int:
             label=label,
             section_col=section_col,
             section_note=section_note,
+            qc_note=qc_note,
             normalization=normalization,
             n_obs=n_obs,
             n_vars=n_vars,
@@ -672,6 +825,8 @@ def main() -> int:
     else:
         notes.append(f"dataset={run['label']} ({run['n_obs']} cells)")
     notes.append(f"section_id source: {run['section_col'] or 'single-section zeros'}")
+    if run.get("qc_note"):
+        notes.append(run["qc_note"])
     if run.get("section_note"):
         notes.append(run["section_note"])
     notes.append(f"fit_runtime_s={run['elapsed']:.2f}")
