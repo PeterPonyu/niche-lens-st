@@ -262,6 +262,32 @@ def _intrinsic_metrics(result, edges, section_id, seed):
     return metrics, notes_extra
 
 
+# Auto-engage minibatch InfoNCE above this cell count when the user leaves
+# --batch-size at 0 (#302). Below the threshold the exact full-batch loss is
+# kept so existing small-scale numerics stay bitwise-identical; above it a
+# full-batch (2n, 2n) similarity matrix would OOM (~232 GiB at n=124938), so we
+# bound it to O(batch^2) instead of silently downgrading to the 5k slice.
+AUTO_MINIBATCH_THRESHOLD = 50_000
+AUTO_MINIBATCH_SIZE = 4096
+
+
+def _effective_batch_size(requested: int, n_cells: int) -> int:
+    """Resolve the InfoNCE minibatch size actually used.
+
+    A positive ``requested`` is honored verbatim. ``requested <= 0`` (the
+    default) keeps the exact full-batch loss for small inputs but auto-engages a
+    bounded minibatch once ``n_cells`` exceeds :data:`AUTO_MINIBATCH_THRESHOLD`,
+    so atlas-scale datasets fit (O(batch^2)) instead of OOMing then silently
+    downgrading to the fallback slice (#302).
+    """
+    requested = int(requested)
+    if requested > 0:
+        return requested
+    if n_cells > AUTO_MINIBATCH_THRESHOLD:
+        return AUTO_MINIBATCH_SIZE
+    return 0
+
+
 def _fit_with_walls(
     X,
     coords,
@@ -275,9 +301,10 @@ def _fit_with_walls(
 ):
     """Run fit_niche_model, guarding the encoder + _kmeans (n,k,d) walls.
 
-    Returns (result, edges, elapsed_s). Raises on OOM / over-budget so the
-    caller can fall back to the smaller dataset. ``batch_size`` (#61) is
-    threaded into the model config to bound the InfoNCE matrix to O(batch^2).
+    Returns (result, edges, elapsed_s, effective_batch_size). Raises on OOM /
+    over-budget so the caller can fall back to the smaller dataset.
+    ``batch_size`` (#61) is threaded into the model config to bound the InfoNCE
+    matrix to O(batch^2); when left at 0 it auto-engages for large ``n`` (#302).
 
     When ``compute_interaction_summary`` is True (#151), the fitted
     ``prototype_id`` is used to score ligand-receptor enrichment via the gated
@@ -289,6 +316,8 @@ def _fit_with_walls(
 
     edges = build_graph(coords, section_id, k=6, method="knn")
 
+    eff_batch = _effective_batch_size(batch_size, int(X.shape[0]))
+
     cfg = _model.NicheModelConfig(
         embed_dim=EMBED_DIM,
         n_prototypes=N_PROTOTYPES,
@@ -296,7 +325,7 @@ def _fit_with_walls(
         num_threads=num_threads,
         device=device,
         deterministic=False,
-        batch_size=int(batch_size),
+        batch_size=eff_batch,
     )
     t0 = time.time()
     try:
@@ -315,12 +344,19 @@ def _fit_with_walls(
             "--batch-size (e.g. --batch-size 4096) to bound the InfoNCE "
             f"matrix to O(batch^2). Original error: {exc}"
         ) from exc
+    except MemoryError as exc:  # host (CPU) OOM: same actionable hint (#302)
+        raise MemoryError(
+            f"Host out of memory during niche fit on {int(X.shape[0])} cells; "
+            "rerun with --batch-size 4096 (or smaller) to bound the InfoNCE "
+            "matrix to O(batch^2) rather than the full-batch (2n, 2n) "
+            f"similarity. Original error: {exc}"
+        ) from exc
     elapsed = time.time() - t0
     if elapsed > max_seconds:
         raise TimeoutError(
             f"fit exceeded budget: {elapsed:.1f}s > {max_seconds:.1f}s"
         )
-    return result, edges, elapsed
+    return result, edges, elapsed, eff_batch
 
 
 def _interaction_output_rel(summary_df) -> str:
@@ -370,8 +406,10 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         default=0,
         help=(
-            "Minibatch InfoNCE size (#61). 0 keeps the exact full-batch loss; "
-            ">0 bounds the contrastive matrix to O(batch^2) for large datasets."
+            "Minibatch InfoNCE size (#61). 0 (default) keeps the exact "
+            "full-batch loss for small inputs but auto-engages a 4096 minibatch "
+            f"above {AUTO_MINIBATCH_THRESHOLD} cells (#302); >0 forces that size "
+            "and bounds the contrastive matrix to O(batch^2)."
         ),
     )
     parser.add_argument(
@@ -422,7 +460,7 @@ def main() -> int:
             n_vars,
             adata,
         ) = _load_dataset(path, args.already_normalized)
-        result, edges, elapsed = _fit_with_walls(
+        result, edges, elapsed, eff_batch = _fit_with_walls(
             X,
             coords,
             section_id,
@@ -443,6 +481,7 @@ def main() -> int:
             n_vars=n_vars,
             result=result,
             elapsed=elapsed,
+            effective_batch=eff_batch,
             metrics=metrics,
             notes_extra=notes_extra,
         )
@@ -476,6 +515,16 @@ def main() -> int:
         notes.append(f"dataset={run['label']} ({run['n_obs']} cells)")
     notes.append(f"section_id source: {run['section_col'] or 'single-section zeros'}")
     notes.append(f"fit_runtime_s={run['elapsed']:.2f}")
+    eff_batch = int(run["effective_batch"])
+    if eff_batch > 0 and args.batch_size <= 0:
+        notes.append(
+            f"minibatch InfoNCE auto-engaged: batch_size={eff_batch} "
+            f"(n_obs={run['n_obs']} > {AUTO_MINIBATCH_THRESHOLD}; #302)"
+        )
+    elif eff_batch > 0:
+        notes.append(f"minibatch InfoNCE: batch_size={eff_batch}")
+    else:
+        notes.append(f"full-batch InfoNCE (batch_size=0, n_obs={run['n_obs']})")
 
     # Optionally persist the ligand-receptor interaction_summary (#151). Written
     # only when --interaction-summary is set AND the fit produced a table; the
@@ -513,7 +562,8 @@ def main() -> int:
             "device": device,
             "deterministic": False,
             "num_threads": num_threads,
-            "batch_size": int(args.batch_size),
+            "batch_size": int(run["effective_batch"]),
+            "batch_size_requested": int(args.batch_size),
             "reproducibility_level": reproducibility_level,
             "normalization": run["normalization"],
             "interpretability": {

@@ -263,3 +263,32 @@ def test_fit_with_walls_interaction_default_off(monkeypatch):
             X, coords, section_id, max_seconds=10.0, device="cpu", num_threads=1
         )
     assert captured["compute_interaction_summary"] is False
+
+
+# --------------------------------------------------------------------------
+# #302 -- batch_size auto-engages minibatch above the cell-count threshold so
+# atlas-scale datasets fit instead of OOMing then silently downgrading.
+# --------------------------------------------------------------------------
+
+
+def test_effective_batch_size_small_keeps_full_batch():
+    """Below the threshold, batch_size=0 stays full-batch (bitwise-identical)."""
+    n = runner.AUTO_MINIBATCH_THRESHOLD - 1
+    assert runner._effective_batch_size(0, n) == 0
+    assert runner._effective_batch_size(0, 100) == 0
+
+
+def test_effective_batch_size_large_auto_engages():
+    """Above the threshold, batch_size=0 auto-engages the bounded minibatch."""
+    n = runner.AUTO_MINIBATCH_THRESHOLD + 1
+    assert runner._effective_batch_size(0, n) == runner.AUTO_MINIBATCH_SIZE
+    # The 124k atlas (issue #302 / #148) that used to OOM now fits via minibatch.
+    assert runner._effective_batch_size(0, 124_938) == runner.AUTO_MINIBATCH_SIZE
+
+
+def test_effective_batch_size_explicit_value_honored():
+    """An explicit positive --batch-size is used verbatim regardless of n."""
+    assert runner._effective_batch_size(512, 10) == 512
+    assert runner._effective_batch_size(512, 1_000_000) == 512
+    # Non-positive requests below the threshold remain full-batch.
+    assert runner._effective_batch_size(-1, 10) == 0
