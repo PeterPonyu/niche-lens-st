@@ -20,6 +20,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCRIPT = REPO_ROOT / "scripts" / "emit_figures.py"
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+# emit_figures.py imports matplotlib at module load (to pin the Agg backend).
+# matplotlib is an optional `viz` extra and is absent in the minimal CI matrix,
+# so skip this whole module when it is unavailable -- mirroring the
+# importorskip("matplotlib") guard in tests/smoke/test_plot_niche_results.py.
+pytest.importorskip("matplotlib")
+
 _spec = importlib.util.spec_from_file_location("emit_figures", _SCRIPT)
 _mod = importlib.util.module_from_spec(_spec)
 assert _spec.loader is not None
