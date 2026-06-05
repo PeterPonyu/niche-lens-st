@@ -35,6 +35,7 @@ import os
 import sys
 import time
 import traceback
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -129,11 +130,138 @@ def _to_dense_float32(X) -> np.ndarray:
     return np.ascontiguousarray(np.asarray(X), dtype=np.float32)
 
 
-def _load_dataset(path: Path, already_normalized: bool):
+# Section/sample column autodetect order + the tiling-artifact heuristic (#343).
+# A "section" is a biological tissue section over which a kNN niche graph is
+# coherent. MERSCOPE stores obs['fov'] (microscope field-of-view tiles, ~tens of
+# cells each) FIRST in this order, so naive autodetect would shatter the graph
+# into per-tile patches. We still pick the column (record-and-warn, never crash)
+# but flag it loudly when its level count / cells-per-level look tile-sized.
+SECTION_CANDIDATES = ("fov", "slice_id", "section_id", "sample", "batch")
+TILING_MAX_SECTIONS = 50
+TILING_MIN_CELLS_PER_SECTION = 200
+
+
+def _column_codes(obs, col) -> np.ndarray:
+    """Integer group codes for obs column ``col``.
+
+    Works for a pandas DataFrame/Series (uses categorical codes) and for a plain
+    dict-of-arrays obs (factorizes via ``np.unique``), so the resolver is testable
+    without scanpy/anndata. Returns an int64 ndarray of group codes.
+    """
+    column = obs[col]
+    # pandas Series: categorical codes preserve label identity and map NaN -> -1.
+    if hasattr(column, "astype") and hasattr(column, "to_numpy"):
+        try:
+            codes = column.astype("category").cat.codes.to_numpy()
+            return np.ascontiguousarray(codes, dtype=np.int64).reshape(-1)
+        except Exception:  # noqa: BLE001
+            pass
+    values = np.asarray(column)
+    _uniques, codes = np.unique(values, return_inverse=True)
+    return np.ascontiguousarray(codes, dtype=np.int64).reshape(-1)
+
+
+def resolve_section_id(obs_columns, obs, n_obs, *, section_col_arg="auto"):
+    """Resolve per-cell ``section_id`` codes for the per-section kNN graph.
+
+    Pure (scanpy-free) and testable. ``obs`` may be a pandas DataFrame or a plain
+    dict-of-arrays; ``obs_columns`` is its column-name collection.
+
+    ``section_col_arg`` semantics:
+
+    * ``"auto"`` (default): pick the first present of :data:`SECTION_CANDIDATES`.
+      If the chosen column has an implausibly high section count
+      (``n_sections > TILING_MAX_SECTIONS`` OR mean cells/section
+      ``< TILING_MIN_CELLS_PER_SECTION``) it is almost certainly a microscope
+      tiling artifact (e.g. MERSCOPE ``fov``), not biological sections -- emit a
+      prominent ``warnings.warn`` and record the same text as ``note`` (so the
+      run manifest captures it), but STILL return the codes (record-and-warn,
+      never silently fragment, never crash). If no candidate column is present,
+      fall back to a single section (zeros).
+    * ``"none"`` / ``"single"`` (case-insensitive): force a single section over
+      the global coords (``section_id`` all zeros, ``section_col_used=None``).
+    * any other value: treat as an explicit obs column name; raise ``KeyError``
+      naming the column if it is absent. No heuristic warning -- an explicit
+      column is the operator's deliberate choice.
+
+    Returns ``(section_id int64 ndarray[n_obs], section_col_used, note)`` where
+    ``note`` is ``None`` when there is nothing to record.
+    """
+    n_obs = int(n_obs)
+    arg = (section_col_arg or "auto").strip()
+    arg_lower = arg.lower()
+
+    if arg_lower in ("none", "single"):
+        note = (
+            "section_col=none -> forced single section "
+            "(zeros over global coords)"
+        )
+        return np.zeros(n_obs, dtype=np.int64), None, note
+
+    columns = list(obs_columns)
+
+    if arg_lower == "auto":
+        section_col = next((c for c in SECTION_CANDIDATES if c in columns), None)
+        if section_col is None:
+            return np.zeros(n_obs, dtype=np.int64), None, None
+        heuristic = True
+    else:
+        if arg not in columns:
+            raise KeyError(
+                f"--section-col '{arg}' not found in obs columns {sorted(columns)}"
+            )
+        section_col = arg
+        heuristic = False  # explicit column: operator's choice, no tiling warn
+
+    section_id = _column_codes(obs, section_col)
+    n_sections = int(np.unique(section_id).size)
+    mean_cells = float(n_obs / n_sections) if n_sections else 0.0
+
+    note = None
+    if heuristic and (
+        n_sections > TILING_MAX_SECTIONS
+        or mean_cells < TILING_MIN_CELLS_PER_SECTION
+    ):
+        note = (
+            f"column '{section_col}' has {n_sections} levels "
+            f"(~{mean_cells:.0f} cells/level); likely a microscope tiling "
+            "artifact (e.g. MERSCOPE fov), not biological sections -- the "
+            "per-section kNN graph will be fragmented. Pass --section-col none "
+            "to treat as a single section."
+        )
+        warnings.warn(note, UserWarning, stacklevel=2)
+
+    return section_id, section_col, note
+
+
+def _peak_rss_bytes():
+    """Peak resident set size of this process in bytes, or ``None`` (#343).
+
+    Wraps ``resource.getrusage(RUSAGE_SELF).ru_maxrss``. The unit of ``ru_maxrss``
+    is platform-dependent -- **bytes on macOS, KiB on Linux/BSD** -- so we
+    normalize to bytes. Never raises: returns ``None`` if ``resource`` is
+    unavailable (e.g. Windows) or the call fails. This feeds the exact
+    ``run_metadata["peak_rss_bytes"]`` key the N-F2 scalability figure consumes.
+    """
+    try:
+        import resource
+
+        ru_maxrss = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+        if sys.platform == "darwin":
+            return ru_maxrss  # already bytes on macOS
+        return ru_maxrss * 1024  # KiB -> bytes on Linux/BSD
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _load_dataset(path: Path, already_normalized: bool, section_col_arg="auto"):
     """Load an AnnData, cast X to float32, conditionally log1p, build inputs.
 
-    Returns (X float32 dense, coords float32, section_id int64, normalization
-    dict, n_obs, n_vars).
+    Returns (X float32 dense, coords float32, section_id int64, section_col_used,
+    normalization dict, n_obs, n_vars, adata). The section-resolution note (if
+    any -- e.g. the tiling-artifact warning) is stashed on
+    ``adata.uns['_section_note']`` so callers can record it without widening this
+    return tuple.
     """
     import scanpy as sc
 
@@ -159,17 +287,15 @@ def _load_dataset(path: Path, already_normalized: bool):
         raise KeyError(f"{path} has no obsm['spatial']; cannot build graph")
     coords = np.ascontiguousarray(adata.obsm["spatial"], dtype=np.float32)
 
-    # section_id from a sample/section column if present, else single section.
-    section_col = None
-    for cand in ("fov", "slice_id", "section_id", "sample", "batch"):
-        if cand in adata.obs.columns:
-            section_col = cand
-            break
-    if section_col is not None:
-        codes = adata.obs[section_col].astype("category").cat.codes.to_numpy()
-        section_id = np.ascontiguousarray(codes, dtype=np.int64)
-    else:
-        section_id = np.zeros(n_obs, dtype=np.int64)
+    # section_id via the operator-overridable resolver + tiling-artifact guard.
+    section_id, section_col, section_note = resolve_section_id(
+        list(adata.obs.columns),
+        adata.obs,
+        n_obs,
+        section_col_arg=section_col_arg,
+    )
+    # Carry the note out without widening the return tuple (#343).
+    adata.uns["_section_note"] = section_note
 
     normalization = {"applied": applied, "method": method}
     return (
@@ -400,6 +526,19 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dataset", choices=("auto", "primary", "fallback"), default="auto"
     )
+    parser.add_argument(
+        "--section-col",
+        default="auto",
+        help=(
+            "Section/sample column for the per-section kNN graph (#343). 'auto' "
+            "(default) autodetects from (fov, slice_id, section_id, sample, "
+            "batch) and WARNS if the chosen column looks like a microscope "
+            "tiling artifact (e.g. MERSCOPE fov: thousands of ~tile-sized "
+            "levels that would fragment the graph). 'none' (or 'single') forces "
+            "a single section over global coords. Any other value is used as an "
+            "explicit obs column name (errors if absent)."
+        ),
+    )
     parser.add_argument("--max-seconds", type=float, default=DEFAULT_MAX_SECONDS)
     parser.add_argument(
         "--batch-size",
@@ -459,7 +598,8 @@ def main() -> int:
             n_obs,
             n_vars,
             adata,
-        ) = _load_dataset(path, args.already_normalized)
+        ) = _load_dataset(path, args.already_normalized, args.section_col)
+        section_note = adata.uns.get("_section_note")
         result, edges, elapsed, eff_batch = _fit_with_walls(
             X,
             coords,
@@ -476,6 +616,7 @@ def main() -> int:
             path=path,
             label=label,
             section_col=section_col,
+            section_note=section_note,
             normalization=normalization,
             n_obs=n_obs,
             n_vars=n_vars,
@@ -500,21 +641,46 @@ def main() -> int:
             used_path = PRIMARY_PATH
             run = run_on(PRIMARY_PATH, "primary")
         except (MemoryError, TimeoutError, RuntimeError) as exc:
-            notes.append(
-                f"fell back to 5488-cell slice from primary 124k wall: "
-                f"{type(exc).__name__}: {exc}"
+            # OOM-as-OOM honesty (#344): when the primary fit ran out of memory,
+            # record it AS an OOM (the exception text already carries the real
+            # attempted-allocation/cell-count + the minibatch hint -- we do NOT
+            # fabricate any number) rather than logging a generic "wall".
+            is_oom = isinstance(exc, MemoryError) or (
+                "out of memory" in str(exc).lower()
             )
+            if is_oom:
+                notes.append(
+                    f"oom=True; {type(exc).__name__}: {exc}; "
+                    "minibatch fallback engaged -> switched to fallback dataset"
+                )
+            else:
+                notes.append(
+                    f"fell back to 5488-cell slice from primary 124k wall: "
+                    f"{type(exc).__name__}: {exc}"
+                )
             traceback.print_exc()
             used_path = FALLBACK_PATH
             run = run_on(FALLBACK_PATH, "fallback")
 
     notes.extend(run["notes_extra"])
-    if run["label"] == "fallback" and args.dataset != "fallback":
+    # A REAL fresh fallback = the auto path downshifted to the 5488-cell single
+    # MERFISH section (an explicit --dataset fallback is an operator choice, not
+    # an atlas-scale claim being silently downsized, so it is not flagged here).
+    is_fallback = run["label"] == "fallback" and args.dataset != "fallback"
+    if is_fallback:
         notes.append("dataset=fallback (5488 cells)")
     else:
         notes.append(f"dataset={run['label']} ({run['n_obs']} cells)")
     notes.append(f"section_id source: {run['section_col'] or 'single-section zeros'}")
+    if run.get("section_note"):
+        notes.append(run["section_note"])
     notes.append(f"fit_runtime_s={run['elapsed']:.2f}")
+
+    # Peak resident memory of the run (#343) -- the field the N-F2 scalability
+    # figure consumes. None (with a note) when the platform can't report it.
+    peak_rss_bytes = _peak_rss_bytes()
+    if peak_rss_bytes is None:
+        notes.append("peak_rss_bytes unavailable (resource.getrusage failed)")
     eff_batch = int(run["effective_batch"])
     if eff_batch > 0 and args.batch_size <= 0:
         notes.append(
@@ -547,38 +713,51 @@ def main() -> int:
     }
     if interaction_rel is not None:
         outputs_manifest["interaction_summary"] = interaction_rel
+    run_metadata = {
+        "dataset_paths": [str(used_path)],
+        "n_obs": run["n_obs"],
+        "n_vars": run["n_vars"],
+        "seed": seed,
+        "runtime_s": run["elapsed"],
+        "started_utc": started_utc,
+        "device": device,
+        "deterministic": False,
+        "num_threads": num_threads,
+        "batch_size": int(run["effective_batch"]),
+        "batch_size_requested": int(args.batch_size),
+        "peak_rss_bytes": peak_rss_bytes,
+        "reproducibility_level": reproducibility_level,
+        "normalization": run["normalization"],
+        "interpretability": {
+            "model_is_learned": True,
+            "encoder": (
+                "contrastive GraphSAGE-mean niche encoder (InfoNCE) trained "
+                "on cell-centered subgraphs"
+            ),
+            "domain_assignment": (
+                "deterministic k-means over learned embeddings H -> prototype_id"
+            ),
+            "caveats": [],
+        },
+        "notes": "; ".join(notes),
+    }
+    # Structured anti-overclaim signal: the emitters (emit_figures.py /
+    # emit_results_tables.py) detect the single-section fallback EXCLUSIVELY via
+    # this key and only then set paper_claim_ready=False. Free-text notes alone
+    # would leave that safeguard silently inert on a real fresh fallback run.
+    if is_fallback:
+        run_metadata["_fallback_note"] = (
+            "DOWNSIZED SINGLE-SECTION FALLBACK, NOT THE ATLAS-SCALE RUN "
+            "(5488-cell single MERFISH section; the conserved/sample-specific "
+            "distinction is degenerate and the scale is not representative of "
+            "the target dataset). Do NOT cite as atlas-scale results."
+        )
     paths = results_contract.write_results(
         project="niche-lens-st",
         dataset_card_id=card_id,
         metrics=run["metrics"],
         outputs=outputs_manifest,
-        run_metadata={
-            "dataset_paths": [str(used_path)],
-            "n_obs": run["n_obs"],
-            "n_vars": run["n_vars"],
-            "seed": seed,
-            "runtime_s": run["elapsed"],
-            "started_utc": started_utc,
-            "device": device,
-            "deterministic": False,
-            "num_threads": num_threads,
-            "batch_size": int(run["effective_batch"]),
-            "batch_size_requested": int(args.batch_size),
-            "reproducibility_level": reproducibility_level,
-            "normalization": run["normalization"],
-            "interpretability": {
-                "model_is_learned": True,
-                "encoder": (
-                    "contrastive GraphSAGE-mean niche encoder (InfoNCE) trained "
-                    "on cell-centered subgraphs"
-                ),
-                "domain_assignment": (
-                    "deterministic k-means over learned embeddings H -> prototype_id"
-                ),
-                "caveats": [],
-            },
-            "notes": "; ".join(notes),
-        },
+        run_metadata=run_metadata,
         results_dir=str(results_dir),
     )
 
