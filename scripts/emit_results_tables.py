@@ -362,10 +362,13 @@ def emit_leaderboard(
 
     baseline_rows: list[dict[str, Any]] = []
     if baselines_glob:
-        for p in sorted(glob_module.glob(str(baselines_glob))):
+        seen: set[str] = set()
+        for p in sorted(glob_module.glob(str(baselines_glob), recursive=True)):
             bp = Path(p).resolve()
-            method = bp.parent.name  # directory name == baseline name
-            baseline_rows.append(_extract_row(bp, method))
+            if str(bp) in seen:
+                continue
+            seen.add(str(bp))
+            baseline_rows.append(_extract_row(bp, _baseline_method(bp)))
 
     # Stable order: model first, baselines sorted lexicographically by method.
     baseline_rows.sort(key=lambda r: r["method"])
@@ -395,6 +398,33 @@ def emit_leaderboard(
     return {"csv": csv_path, "md": md_path, "json": json_path}
 
 
+def _baseline_method(metrics_path: Path) -> str:
+    """Resolve a baseline's method name for its leaderboard row.
+
+    run_baselines_niche records the baseline tag in run_metadata's
+    ``interpretability.baseline``; that is the robust source because
+    ``results_contract.write_results`` nests every run under a ``<project>/``
+    subdir, so the metrics.json parent dir is the project name, not the baseline
+    (e.g. ``results/baselines/diffusion/niche-lens-st/metrics.json``). Falls back
+    to the first path component under ``baselines/`` (then the bare parent dir)
+    when the tag is absent.
+    """
+    meta_path = metrics_path.parent / "run_metadata.json"
+    if meta_path.exists():
+        try:
+            tag = _load_json(meta_path).get("interpretability", {}).get("baseline")
+            if tag:
+                return str(tag)
+        except RuntimeError:
+            pass
+    parts = metrics_path.resolve().parts
+    if "baselines" in parts:
+        i = parts.index("baselines")
+        if i + 1 < len(parts):
+            return parts[i + 1]
+    return metrics_path.parent.name
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -412,8 +442,10 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--baselines-glob",
-        default=str(_REPO_ROOT / "results" / "baselines" / "*" / "metrics.json"),
-        help='Glob for baseline metrics files (may match zero files). Default: results/baselines/*/metrics.json.',
+        default=str(_REPO_ROOT / "results" / "baselines" / "**" / "metrics.json"),
+        help="Recursive glob for baseline metrics files (may match zero files). "
+        "Default: results/baselines/**/metrics.json (matches the "
+        "<baseline>/<project>/metrics.json layout written by run_baselines_niche).",
     )
     parser.add_argument(
         "--out-dir",
