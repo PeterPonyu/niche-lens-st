@@ -76,6 +76,19 @@ baseline AND random labeling on eligible real datasets.
 **Numeric threshold: to be fixed by pre-hoc synthetic calibration before touching real data**
 (threshold transferred from the synthetic grid calibration above).
 
+**Amendment 2026-06-06 (#288 — supervised niche-recovery table; single-dataset scope).**
+A secondary, caveated supervised niche-recovery table is now implemented in
+`scripts/run_real_niche.py` (`--supervised-metrics` → `outputs/supervised_metrics.json`): for each
+available author reference it reports ARI/NMI/AMI/macro-F1 of (a) the learned prototype assignment and
+(b) k-means on the embedding at `k = n_ref_classes` over 3 seeds (run-to-run distribution). *Scope is
+single-dataset for now:* only `codex_spleen_goltsev2018` ships author dual ground truth
+(`obs['niche']`, `obs['cell_type']`), and **both labels are clustering-derived, not hand-annotated**.
+Per the intrinsic-metrics-first / GT-skeptic rule these scores are **secondary** — written to a
+separate file, never folded into the headline intrinsic `metrics.json`, and not admissible as a
+standalone accuracy claim. The original #288 multi-dataset, rank-aggregation panel is **deferred**
+until a second niche-GT dataset lands (HuBMAP is access-blocked). The intrinsic metrics (silhouette,
+neighbor-label-agreement, per-niche Moran's I) remain the primary yardstick.
+
 ---
 
 ### C2 — Conserved and sample-specific microenvironments
