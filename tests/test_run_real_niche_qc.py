@@ -133,6 +133,36 @@ def test_qc_mask_float_stored_counts():
 
 
 # --------------------------------------------------------------------------
+# _count_qc_applicable -- count-based QC only applies to raw-count input
+# (protein CODEX intensities are z-scored / background-subtracted, with
+# negatives; min_counts on a negative summed-intensity is meaningless, #360).
+# --------------------------------------------------------------------------
+
+
+def test_count_qc_applicable_true_for_raw_counts():
+    """Raw, unlogged count-like input is QC-applicable."""
+    rng = np.random.default_rng(0)
+    X = rng.integers(0, 200, size=(100, 30)).astype(np.float32)
+    assert runner._count_qc_applicable(X, already_normalized=False) is True
+
+
+def test_count_qc_applicable_false_for_protein_intensities():
+    """Protein intensity (has negatives) is NOT raw counts -> QC skipped."""
+    rng = np.random.default_rng(1)
+    # z-scored / background-subtracted intensities span negatives, like CODEX.
+    X = (rng.standard_normal((100, 30)) * 500.0).astype(np.float32)
+    assert float(X.min()) < 0.0
+    assert runner._count_qc_applicable(X, already_normalized=False) is False
+
+
+def test_count_qc_applicable_false_when_already_normalized():
+    """Even count-like input is not count-QC'd once normalization is asserted."""
+    rng = np.random.default_rng(2)
+    X = rng.integers(0, 200, size=(100, 30)).astype(np.float32)
+    assert runner._count_qc_applicable(X, already_normalized=True) is False
+
+
+# --------------------------------------------------------------------------
 # qc_note_string -- the run_metadata notes fragment format
 # --------------------------------------------------------------------------
 
@@ -220,6 +250,50 @@ def test_load_dataset_filters_empty_cells(tmp_path):
     assert qc_note is not None
     assert f"n_before={n_good + n_empty}" in qc_note
     assert f"n_after={n_good}" in qc_note
+
+
+def test_load_dataset_skips_qc_for_protein_like(tmp_path):
+    """Protein-intensity input (negatives) keeps ALL cells: count-QC is skipped
+    and no count-normalization is applied (#360 codex_spleen primary)."""
+    sc = pytest.importorskip("scanpy")  # noqa: F841
+    ad = pytest.importorskip("anndata")
+
+    rng = np.random.default_rng(17)
+    n_cells, n_markers = 150, 12
+    # z-scored / background-subtracted protein intensities: some rows sum < 0,
+    # which the count-QC (min_counts=10) would otherwise wrongly drop.
+    X = (rng.standard_normal((n_cells, n_markers)) * 800.0).astype(np.float32)
+    assert (X.sum(axis=1) < 0).any()
+
+    adata = ad.AnnData(X=X)
+    adata.obsm["spatial"] = rng.uniform(0, 1000, size=(n_cells, 2)).astype(
+        np.float32
+    )
+    path = tmp_path / "protein.h5ad"
+    adata.write_h5ad(str(path))
+
+    (
+        out_X,
+        _coords,
+        _section_id,
+        _section_col,
+        normalization,
+        n_obs,
+        _n_vars,
+        out_adata,
+    ) = runner._load_dataset(
+        path, already_normalized=False, min_counts=10, min_genes=5
+    )
+
+    # No cell dropped: count-QC does not apply to non-count input.
+    assert n_obs == n_cells
+    assert out_X.shape[0] == n_cells
+    # No count-normalization applied (negatives -> not raw counts).
+    assert normalization["applied"] is False
+    # The QC note records that QC was skipped (not a 0%-dropped count run).
+    qc_note = out_adata.uns.get("_qc_note")
+    assert qc_note is not None
+    assert "skip" in qc_note.lower()
 
 
 def test_load_dataset_aborts_on_near_empty(tmp_path):

@@ -138,6 +138,89 @@ def test_minibatch_loss_decreases_over_epochs():
     assert np.mean(losses[-q:]) < np.mean(losses[:q])
 
 
+def _naive_minibatch_loss(z1, z2, tau, batch_size, generator):
+    """Reference: the legacy accumulate-all-blocks-then-one-backward loss.
+
+    Identical math to the memory-bounded ``_info_nce_minibatch`` but builds and
+    retains every block's similarity graph at once (the pre-fix behavior). Used
+    to pin that the checkpointed refactor yields identical loss AND gradients.
+    """
+    import torch
+
+    safe_tau = max(float(tau), 1e-4)
+    n = z1.shape[0]
+    b = int(batch_size)
+    perm = torch.randperm(n, generator=generator, device=z1.device)
+    total = z1.new_zeros(())
+    n_blocks = 0
+    for start in range(0, n, b):
+        idx = perm[start : start + b]
+        m = idx.shape[0]
+        zb = torch.cat([z1[idx], z2[idx]], dim=0)
+        sim = zb @ zb.t() / safe_tau
+        sim = sim.masked_fill(
+            torch.eye(2 * m, dtype=torch.bool, device=zb.device), float("-inf")
+        )
+        targets = torch.cat(
+            [torch.arange(m, 2 * m), torch.arange(0, m)]
+        ).to(zb.device)
+        total = total + torch.nn.functional.cross_entropy(sim, targets)
+        n_blocks += 1
+    return total / n_blocks
+
+
+def test_minibatch_loss_and_grad_match_naive_accumulation():
+    """The memory-bounded path must give identical loss AND gradients to the
+    naive accumulate-then-backward reference (checkpointing preserves both)."""
+    import torch
+
+    torch.manual_seed(0)
+    base1 = torch.nn.functional.normalize(torch.randn(50, 8), dim=1)
+    base2 = torch.nn.functional.normalize(torch.randn(50, 8), dim=1)
+
+    # New (checkpointed) path.
+    z1a = base1.clone().requires_grad_(True)
+    z2a = base2.clone().requires_grad_(True)
+    gen_a = torch.Generator().manual_seed(123)
+    loss_new = _info_nce_minibatch(z1a, z2a, 0.2, batch_size=8, generator=gen_a)
+    loss_new.backward()
+
+    # Naive reference with an identically-seeded permutation.
+    z1b = base1.clone().requires_grad_(True)
+    z2b = base2.clone().requires_grad_(True)
+    gen_b = torch.Generator().manual_seed(123)
+    loss_ref = _naive_minibatch_loss(z1b, z2b, 0.2, batch_size=8, generator=gen_b)
+    loss_ref.backward()
+
+    assert torch.allclose(loss_new, loss_ref, atol=1e-6)
+    assert torch.allclose(z1a.grad, z1b.grad, atol=1e-6)
+    assert torch.allclose(z2a.grad, z2b.grad, atol=1e-6)
+
+
+def test_minibatch_checkpoints_each_block(monkeypatch):
+    """When inputs require grad, each block is wrapped in a gradient checkpoint
+    so its (2b, 2b) similarity graph is freed (peak O(b^2), not O(n*b))."""
+    import torch
+    import torch.utils.checkpoint as ckpt
+
+    calls = {"n": 0}
+    real_ckpt = ckpt.checkpoint
+
+    def counting_ckpt(fn, *args, **kwargs):
+        calls["n"] += 1
+        return real_ckpt(fn, *args, **kwargs)
+
+    monkeypatch.setattr(ckpt, "checkpoint", counting_ckpt)
+
+    n, d, b = 40, 8, 8  # 40/8 = 5 blocks
+    z1 = torch.nn.functional.normalize(torch.randn(n, d), dim=1).requires_grad_(True)
+    z2 = torch.nn.functional.normalize(torch.randn(n, d), dim=1).requires_grad_(True)
+    gen = torch.Generator().manual_seed(0)
+    loss = _info_nce_minibatch(z1, z2, 0.2, batch_size=b, generator=gen)
+    loss.backward()
+    assert calls["n"] == (n + b - 1) // b  # one checkpoint per block
+
+
 def test_fullbatch_default_unchanged_bitwise():
     """The default config (batch_size=0) must reproduce the legacy full-batch
     embeddings bitwise across runs (reproducibility guard, #61 AC)."""

@@ -39,7 +39,13 @@ import numpy as np
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _DATA_ROOT = _REPO_ROOT.parent / "data"
 
-PRIMARY_PATH = _DATA_ROOT / "processed" / "niche_GSE282124" / "anndata.h5ad"
+# Primary repointed to the CODEX protein spleen dataset (#360); see
+# run_real_niche.py for the data provenance + protein/section handling. The
+# baseline loader skips count-normalization for non-count input (negatives) and
+# autodetects obs['section_id'] (the per-FOV-tile graph boundary).
+PRIMARY_PATH = (
+    _DATA_ROOT / "processed" / "codex_spleen_goltsev2018" / "anndata.h5ad"
+)
 FALLBACK_PATH = _DATA_ROOT / "processed" / "niche_merfish_slice" / "anndata.h5ad"
 
 # Kept consistent with run_real_niche so the comparison is apples-to-apples.

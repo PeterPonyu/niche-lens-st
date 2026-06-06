@@ -6,7 +6,20 @@ runs the FITTED contrastive niche model (``fit_niche_model``) -- NOT a
 truth-vs-truth scoring -- and emits intrinsic/unsupervised metrics only (no
 ARI, no marker-recall-vs-truth) via the vendored uniform results contract.
 
-Primary dataset: ``data/processed/niche_GSE282124/anndata.h5ad`` (124938 x 315).
+Primary dataset (#360): ``data/processed/codex_spleen_goltsev2018/anndata.h5ad``
+(734101 x 32, CODEX multiplexed-protein mouse spleen, Goltsev et al. 2018). This
+replaces the empty ``niche_GSE282124`` (GSM8636485 was near-empty as deposited on
+GEO; the originally re-selected HuBMAP intestine CODEX is access-blocked on this
+network -- Zenodo 403 / Dryad 401). The CODEX ``.X`` holds z-scored /
+background-subtracted protein intensities (NOT transcript counts, so it carries
+negatives) -> count-normalization and count-QC are both auto-skipped. Spatial
+coordinates are per-FOV-tile-local (every ``section_id`` tile shares the same
+~1342 x 1006 box), so the per-section kNN graph MUST be built per tile. Autodetect
+picks ``obs['section_id']`` and the coordinate-aware tiling guard recognizes the
+overlapping per-tile boxes as independent local frames (kept split, no spurious
+"tiling artifact" warning); collapsing to a single section would wrongly bridge
+physically distant cells that share tile-local (x, y).
+
 Feasibility fallback: ``data/processed/niche_merfish_slice/anndata.h5ad``
 (5488 x 155) -- triggered on EITHER the encoder wall OR the post-encoder
 ``_kmeans`` dense ``(n, k, d)`` materialization wall.
@@ -45,7 +58,9 @@ import numpy as np
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _DATA_ROOT = _REPO_ROOT.parent / "data"
 
-PRIMARY_PATH = _DATA_ROOT / "processed" / "niche_GSE282124" / "anndata.h5ad"
+PRIMARY_PATH = (
+    _DATA_ROOT / "processed" / "codex_spleen_goltsev2018" / "anndata.h5ad"
+)
 FALLBACK_PATH = _DATA_ROOT / "processed" / "niche_merfish_slice" / "anndata.h5ad"
 
 # Prototype/embedding sizing kept modest to bound the _kmeans (n,k,d) tensor.
@@ -131,11 +146,11 @@ def _to_dense_float32(X) -> np.ndarray:
     return np.ascontiguousarray(np.asarray(X), dtype=np.float32)
 
 
-# Conservative MERFISH count-QC floor (operator-overridable via the CLI). The
-# primary processed GSE282124 AnnData had NO QC filtering -- 76.18% of its cells
-# carry 0 transcript counts, so ``normalize_total`` divides by zero on those rows
-# -> NaN, which poisons the contrastive fit. We drop low-quality cells from the
-# RAW counts BEFORE normalization so the divide-by-zero never happens.
+# Conservative count-QC floor (operator-overridable via the CLI), applied ONLY to
+# raw-count datasets (see _count_qc_applicable; the protein CODEX primary skips
+# it). For count input with unfiltered empty cells, ``normalize_total`` would
+# divide by zero on the all-zero rows -> NaN, which poisons the contrastive fit;
+# dropping low-quality cells from the RAW counts BEFORE normalization prevents it.
 DEFAULT_MIN_COUNTS = 10
 DEFAULT_MIN_GENES = 5
 # Refuse to fit on near-nothing; warn loudly when QC removes most of the input.
@@ -172,6 +187,28 @@ def qc_cell_mask(counts_matrix, *, min_counts: int, min_genes: int) -> np.ndarra
 
     keep = (total_counts >= float(min_counts)) & (n_genes >= int(min_genes))
     return np.ascontiguousarray(keep, dtype=bool).reshape(-1)
+
+
+def _count_qc_applicable(X, already_normalized: bool) -> bool:
+    """Whether count-based per-cell QC applies to ``X``.
+
+    Count-based QC (``total_counts >= min_counts``, ``n_genes >= min_genes``) is
+    only meaningful for raw, unlogged count matrices. It is **undefined** for:
+
+    * protein / intensity data (e.g. CODEX, #360): ``X`` is z-scored or
+      background-subtracted, carries negatives, and a per-cell summed intensity
+      has no "transcript count" interpretation -- ``min_counts=10`` would drop
+      cells whose background-subtracted total happens to be negative, which is
+      not a quality criterion; and
+    * already-normalized input: the caller asserts normalization is done, so the
+      raw counts the floor refers to are gone.
+
+    Returns ``True`` only when QC should run (raw counts present, not asserted
+    normalized); ``False`` otherwise (the caller then keeps all cells).
+    """
+    if already_normalized:
+        return False
+    return _looks_like_raw_counts(X)
 
 
 def qc_note_string(
@@ -228,7 +265,59 @@ def _column_codes(obs, col) -> np.ndarray:
     return np.ascontiguousarray(codes, dtype=np.int64).reshape(-1)
 
 
-def resolve_section_id(obs_columns, obs, n_obs, *, section_col_arg="auto"):
+def _sections_share_coordinate_frame(coords, section_id) -> bool:
+    """True if per-section coordinate boxes overlap (per-section-LOCAL frames).
+
+    Distinguishes two reasons a column has many small "sections":
+
+    * **per-section-local frames** (e.g. CODEX per-FOV-tile coords, #360): every
+      section's (x, y) lives in the SAME local box, so the GLOBAL bounding box is
+      about the size of a single section's box. These are independent frames that
+      MUST stay split -- collapsing to one section would wrongly bridge cells that
+      merely share a tile-local coordinate. Returns ``True``.
+    * **disjoint sub-region tiles** (true microscope tiling, e.g. MERSCOPE fov):
+      each tile occupies its own patch of one global frame, so the global box is
+      ~``n_sections`` times a single tile's box. Returns ``False``.
+
+    Heuristic: compare the global bounding-box area to the median per-section
+    bounding-box area. ``global ~= section`` (ratio small) => shared/local frames.
+    Robust to a few outliers via the median. Returns ``False`` on degenerate
+    input (no coords, <2 sections, zero-area boxes) so the legacy guard stands.
+    """
+    if coords is None:
+        return False
+    coords = np.asarray(coords, dtype=np.float64)
+    sid = np.asarray(section_id).reshape(-1)
+    if coords.ndim != 2 or coords.shape[0] != sid.size or coords.shape[0] < 2:
+        return False
+    uniq = np.unique(sid)
+    if uniq.size < 2:
+        return False
+
+    gx = float(coords[:, 0].max() - coords[:, 0].min())
+    gy = float(coords[:, 1].max() - coords[:, 1].min())
+    global_area = gx * gy
+    if global_area <= 0.0:
+        return False
+
+    areas = []
+    for code in uniq:
+        m = sid == code
+        sx = float(coords[m, 0].max() - coords[m, 0].min())
+        sy = float(coords[m, 1].max() - coords[m, 1].min())
+        areas.append(sx * sy)
+    median_section_area = float(np.median(areas))
+    if median_section_area <= 0.0:
+        return False
+
+    # Local frames stack on one box: global ~= a single section box. Disjoint
+    # tiles fill the plane: global ~= n_sections * section box. The 4x slack
+    # absorbs jitter/partial overlap while staying far below n_sections.
+    return (global_area / median_section_area) < 4.0
+
+
+def resolve_section_id(obs_columns, obs, n_obs, *, section_col_arg="auto",
+                       coords=None):
     """Resolve per-cell ``section_id`` codes for the per-section kNN graph.
 
     Pure (scanpy-free) and testable. ``obs`` may be a pandas DataFrame or a plain
@@ -289,14 +378,27 @@ def resolve_section_id(obs_columns, obs, n_obs, *, section_col_arg="auto"):
         n_sections > TILING_MAX_SECTIONS
         or mean_cells < TILING_MIN_CELLS_PER_SECTION
     ):
-        note = (
-            f"column '{section_col}' has {n_sections} levels "
-            f"(~{mean_cells:.0f} cells/level); likely a microscope tiling "
-            "artifact (e.g. MERSCOPE fov), not biological sections -- the "
-            "per-section kNN graph will be fragmented. Pass --section-col none "
-            "to treat as a single section."
-        )
-        warnings.warn(note, UserWarning, stacklevel=2)
+        # Coordinate-aware disambiguation (#360): if the sections share one
+        # coordinate frame (overlapping per-section boxes), they are independent
+        # per-section-LOCAL frames (e.g. CODEX per-FOV-tile coords) that MUST stay
+        # split -- record it informationally, but do NOT warn or advise --none
+        # (which would catastrophically bridge tile-local coordinates).
+        if _sections_share_coordinate_frame(coords, section_id):
+            note = (
+                f"column '{section_col}' has {n_sections} per-section-local "
+                f"coordinate frames (~{mean_cells:.0f} cells/level, overlapping "
+                "bounding boxes); kept as independent kNN graph sections "
+                "(per-section-local coords -- do not collapse to one section)."
+            )
+        else:
+            note = (
+                f"column '{section_col}' has {n_sections} levels "
+                f"(~{mean_cells:.0f} cells/level); likely a microscope tiling "
+                "artifact (e.g. MERSCOPE fov), not biological sections -- the "
+                "per-section kNN graph will be fragmented. Pass --section-col "
+                "none to treat as a single section."
+            )
+            warnings.warn(note, UserWarning, stacklevel=2)
 
     return section_id, section_col, note
 
@@ -349,41 +451,58 @@ def _load_dataset(
     adata = sc.read_h5ad(str(path))
     n_before = int(adata.shape[0])
 
-    # Count-based QC on the RAW counts, BEFORE normalization (so the
-    # divide-by-zero on empty cells never happens). The mask is applied to the
-    # AnnData itself, so X / coords / section_id below are all derived from the
-    # filtered cells and stay aligned.
-    keep = qc_cell_mask(adata.X, min_counts=min_counts, min_genes=min_genes)
-    n_after = int(keep.sum())
-    qc_note = qc_note_string(
-        min_counts=min_counts,
-        min_genes=min_genes,
-        n_before=n_before,
-        n_after=n_after,
-    )
-    if n_before and (n_before - n_after) > QC_LOUD_DROP_FRACTION * n_before:
-        warnings.warn(
-            f"QC dropped >{int(QC_LOUD_DROP_FRACTION * 100)}% of cells "
-            f"({qc_note}); the input is mostly empty cells -- inspect the "
-            "upstream processing.",
-            UserWarning,
-            stacklevel=2,
+    # Count-based QC applies ONLY to raw-count input. Protein / intensity data
+    # (CODEX, #360) is z-scored / background-subtracted (carries negatives), so a
+    # per-cell summed-intensity floor is meaningless -- min_counts=10 would drop
+    # cells whose background-subtracted total is merely negative, which is not a
+    # quality criterion. Gate on _count_qc_applicable so non-count primaries keep
+    # all cells (the conditional-normalization branch below skips them too).
+    if _count_qc_applicable(adata.X, already_normalized):
+        # Count-based QC on the RAW counts, BEFORE normalization (so the
+        # divide-by-zero on empty cells never happens). The mask is applied to
+        # the AnnData itself, so X / coords / section_id below are all derived
+        # from the filtered cells and stay aligned.
+        keep = qc_cell_mask(adata.X, min_counts=min_counts, min_genes=min_genes)
+        n_after = int(keep.sum())
+        qc_note = qc_note_string(
+            min_counts=min_counts,
+            min_genes=min_genes,
+            n_before=n_before,
+            n_after=n_after,
         )
-    # Abort only when QC actually removed cells and the survivors are too few to
-    # fit (don't penalize a legitimately small input that passes QC untouched).
-    if n_after < n_before and n_after < QC_MIN_CELLS:
-        raise ValueError(
-            f"QC left {n_after} cells (< {QC_MIN_CELLS}); refusing to fit on "
-            f"near-nothing. {qc_note}. Loosen --min-counts / --min-genes or "
-            "check the upstream processing for this dataset."
+        if n_before and (n_before - n_after) > QC_LOUD_DROP_FRACTION * n_before:
+            warnings.warn(
+                f"QC dropped >{int(QC_LOUD_DROP_FRACTION * 100)}% of cells "
+                f"({qc_note}); the input is mostly empty cells -- inspect the "
+                "upstream processing.",
+                UserWarning,
+                stacklevel=2,
+            )
+        # Abort only when QC actually removed cells and the survivors are too few
+        # to fit (don't penalize a legitimately small input that passes QC
+        # untouched).
+        if n_after < n_before and n_after < QC_MIN_CELLS:
+            raise ValueError(
+                f"QC left {n_after} cells (< {QC_MIN_CELLS}); refusing to fit on "
+                f"near-nothing. {qc_note}. Loosen --min-counts / --min-genes or "
+                "check the upstream processing for this dataset."
+            )
+        adata = adata[keep].copy()
+    else:
+        # Non-count input (protein/intensity, or asserted already-normalized):
+        # count-QC is undefined, so keep every cell and record why.
+        qc_note = (
+            f"qc: skipped -- input is not raw counts "
+            f"(non-count/already-normalized, e.g. protein intensities); "
+            f"count-based QC undefined. n_obs={n_before} (unfiltered)"
         )
-    adata = adata[keep].copy()
     n_obs, n_vars = int(adata.shape[0]), int(adata.shape[1])
 
     # Conditional normalization (plan §4.4 step 1): for count-like input
     # (integer OR float-stored, e.g. MERSCOPE 315-plex, #154) total-count
     # normalize then log1p, so raw counts never reach the encoder. Skipped when
-    # the caller asserts the matrix is already normalized.
+    # the caller asserts the matrix is already normalized OR the input is not
+    # count-like (e.g. CODEX protein intensities are used as-is, #360).
     if already_normalized:
         applied, method = False, "none"
     elif _looks_like_raw_counts(adata.X):
@@ -400,11 +519,14 @@ def _load_dataset(
     coords = np.ascontiguousarray(adata.obsm["spatial"], dtype=np.float32)
 
     # section_id via the operator-overridable resolver + tiling-artifact guard.
+    # coords let the guard distinguish per-section-local frames (CODEX per-FOV
+    # tiles, kept split) from disjoint sub-region tiling (MERSCOPE fov, warned).
     section_id, section_col, section_note = resolve_section_id(
         list(adata.obs.columns),
         adata.obs,
         n_obs,
         section_col_arg=section_col_arg,
+        coords=coords,
     )
     # Carry the notes out without widening the return tuple (#343).
     adata.uns["_section_note"] = section_note
