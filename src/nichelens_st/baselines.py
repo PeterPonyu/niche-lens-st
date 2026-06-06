@@ -198,6 +198,67 @@ def _unit_rows(M: np.ndarray) -> np.ndarray:
     return M / np.maximum(norms, 1e-12)
 
 
+def composition_knn_embedding(
+    cell_type_codes: np.ndarray,
+    coords: np.ndarray,
+    *,
+    k: int,
+    section_id: np.ndarray | None = None,
+    n_types: int | None = None,
+) -> np.ndarray:
+    """Local cell-type composition of each cell's spatial neighborhood.
+
+    The natural niche baseline: describe a cell by *what kinds of cells surround
+    it*, not by its own expression. For each cell we one-hot its type, accumulate
+    the one-hots of its ``k`` spatial neighbors (the same per-section k-NN graph
+    the model uses, so neighbors never cross section boundaries), include the
+    cell itself, and normalise -- giving the fraction of each cell type among the
+    cell and its neighbors. Clustering this composition is the "raw cell-type-
+    fraction kNN" niche the learned model must beat (#320).
+
+    ``cell_type_codes`` is any per-cell categorical (real annotation or a
+    pre-clustering of expression); columns of the result correspond to the sorted
+    unique codes. ``n_types`` fixes the column count (default = number of distinct
+    codes) and must be at least the number of distinct codes. A cell with no
+    neighbors falls back to its own one-hot, so every row is a valid composition
+    (non-negative, sums to 1).
+
+    Deterministic and pure ``numpy`` / ``scipy``. Returns a ``(n_cells, n_types)``
+    float64 array.
+    """
+    codes = np.asarray(cell_type_codes).reshape(-1)
+    pts = np.asarray(coords, dtype=np.float64)
+    n = codes.shape[0]
+    if pts.shape[0] != n:
+        raise ValueError(
+            f"coords must have one row per cell; got {pts.shape[0]} for {n} cells"
+        )
+    if k < 0:
+        raise ValueError(f"k must be non-negative; got {k}")
+    uniq, inv = np.unique(codes, return_inverse=True)
+    if n_types is None:
+        n_types = int(uniq.size)
+    n_types = int(n_types)
+    if n_types < uniq.size:
+        raise ValueError(
+            f"n_types={n_types} too small for {uniq.size} distinct cell types"
+        )
+    onehot = np.zeros((n, n_types), dtype=np.float64)
+    onehot[np.arange(n), inv] = 1.0
+
+    if section_id is None:
+        section_id = np.zeros(n, dtype=np.int64)
+    section_id = np.asarray(section_id, dtype=np.int64)
+    edges = build_graph(pts, section_id, k=int(k), method="knn")
+
+    comp = onehot.copy()  # include the cell itself
+    if edges.shape[1]:
+        np.add.at(comp, edges[0], onehot[edges[1]])
+    totals = comp.sum(axis=1, keepdims=True)
+    totals[totals == 0.0] = 1.0
+    return comp / totals
+
+
 def assign_prototypes(
     embedding: np.ndarray, *, n_clusters: int, seed: int = 0, n_iters: int = 50
 ) -> np.ndarray:
@@ -214,6 +275,7 @@ def assign_prototypes(
 
 
 __all__ = [
+    "composition_knn_embedding",
     "neighborhood_averaged_features",
     "neighborhood_augmented_embedding",
     "spatial_diffusion_embedding",
