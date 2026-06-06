@@ -1231,9 +1231,13 @@ def main() -> int:
 
     notes.extend(run["notes_extra"])
     # A REAL fresh fallback = the auto path downshifted to the 5488-cell single
-    # MERFISH section (an explicit --dataset fallback is an operator choice, not
-    # an atlas-scale claim being silently downsized, so it is not flagged here).
-    is_fallback = run["label"] == "fallback" and args.dataset != "fallback"
+    # MERFISH section. The run is "on fallback data" whenever the fitted dataset
+    # is the slice, regardless of HOW it was selected: an explicit --dataset
+    # fallback is the SAME downsized single section as the auto->OOM path, so the
+    # structured _fallback_note anti-overclaim guard below MUST still fire (the
+    # emitters gate paper_claim_ready on that key and only see run_metadata.json,
+    # never the CLI). #343 / META 2026-06-06.
+    is_fallback = run["label"] == "fallback"
     if is_fallback:
         notes.append("dataset=fallback (5488 cells)")
     else:
