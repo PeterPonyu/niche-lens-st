@@ -296,11 +296,12 @@ class _FakeResult:
     interaction_summary = None
 
 
-def _drive_main(monkeypatch, tmp_path, *, primary_oom):
+def _drive_main(monkeypatch, tmp_path, *, primary_oom, argv=None):
     """Run ``runner.main()`` with the fit stubbed; return the captured run_metadata.
 
     ``primary_oom=True`` makes the primary load raise a host OOM so the auto path
-    downshifts to the fallback; ``False`` lets the primary succeed.
+    downshifts to the fallback; ``False`` lets the primary succeed. ``argv``
+    overrides the command line (default: bare ``auto`` run).
     """
     from nichelens_st import results_contract
 
@@ -344,7 +345,7 @@ def _drive_main(monkeypatch, tmp_path, *, primary_oom):
     monkeypatch.setattr(runner, "_intrinsic_metrics", fake_metrics)
     monkeypatch.setattr(results_contract, "write_results", fake_write)
     monkeypatch.setattr(results_contract, "dataset_card_id", lambda paths: "card-x")
-    monkeypatch.setattr(sys, "argv", ["run_real_niche.py"])  # default --dataset auto
+    monkeypatch.setattr(sys, "argv", argv or ["run_real_niche.py"])  # default auto
 
     assert runner.main() == 0
     return captured["run_metadata"]
@@ -364,3 +365,39 @@ def test_primary_success_omits_fallback_note(monkeypatch, tmp_path):
     """A successful primary run must NOT carry _fallback_note (no false flag)."""
     run_metadata = _drive_main(monkeypatch, tmp_path, primary_oom=False)
     assert "_fallback_note" not in run_metadata
+
+
+def test_run_emits_peak_rss_bytes_top_level(monkeypatch, tmp_path):
+    """#343: every run records peak_rss_bytes TOP-LEVEL in run_metadata (the
+    scalability memory column N-F2 consumes). It is an int where the platform
+    reports RSS and None where resource.getrusage is unavailable -- but the key
+    is always present, never silently dropped."""
+    run_metadata = _drive_main(monkeypatch, tmp_path, primary_oom=False)
+    assert "peak_rss_bytes" in run_metadata
+    val = run_metadata["peak_rss_bytes"]
+    assert val is None or (isinstance(val, int) and val > 0)
+
+
+def test_fallback_run_also_emits_peak_rss_bytes(monkeypatch, tmp_path):
+    """The peak-RSS memory column is recorded on the fallback path too (#343),
+    so the scalability figure is backed regardless of which dataset ran."""
+    run_metadata = _drive_main(monkeypatch, tmp_path, primary_oom=True)
+    assert "peak_rss_bytes" in run_metadata
+    val = run_metadata["peak_rss_bytes"]
+    assert val is None or (isinstance(val, int) and val > 0)
+
+
+def test_explicit_fallback_run_also_emits_fallback_note(monkeypatch, tmp_path):
+    """An explicit ``--dataset fallback`` run is the SAME downsized single-section
+    slice as the auto->fallback path, so it must still carry the structured
+    _fallback_note. The emitters gate paper_claim_ready on that key and only see
+    run_metadata.json (not the CLI), so omitting it on an explicit run is a silent
+    over-claim hole (#343 / anti-overclaim)."""
+    run_metadata = _drive_main(
+        monkeypatch,
+        tmp_path,
+        primary_oom=False,
+        argv=["run_real_niche.py", "--dataset", "fallback"],
+    )
+    assert "_fallback_note" in run_metadata
+    assert "5488" in run_metadata["_fallback_note"]
