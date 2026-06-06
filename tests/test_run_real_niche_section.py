@@ -124,6 +124,79 @@ def test_resolve_explicit_tiling_like_column_does_not_warn():
 
 
 # --------------------------------------------------------------------------
+# resolve_section_id -- coordinate-aware tiling guard (#360). Many sections that
+# share a coordinate frame (overlapping per-section bounding boxes, e.g. CODEX
+# per-FOV-tile-LOCAL coords) are independent local frames that MUST stay split --
+# NOT a sub-region tiling artifact -- so the "pass --section-col none" advice (and
+# its warning) must be SUPPRESSED, while the codes are still returned.
+# --------------------------------------------------------------------------
+
+
+def _tiled_coords(section_id, *, local: bool, box=(1000.0, 1000.0), seed=0):
+    """Coordinates for a sectioned dataset.
+
+    ``local=True``  -> every section spans the SAME box (per-section-local frames,
+    overlapping bounding boxes; the CODEX case).
+    ``local=False`` -> each section occupies a DISJOINT sub-region of one global
+    frame (true microscope tiling; boxes do not overlap).
+    """
+    rng = np.random.default_rng(seed)
+    sid = np.asarray(section_id)
+    coords = np.zeros((sid.size, 2), dtype=np.float64)
+    for code in np.unique(sid):
+        m = sid == code
+        local_xy = rng.uniform(0, box, size=(int(m.sum()), 2))
+        if local:
+            coords[m] = local_xy
+        else:
+            coords[m] = local_xy + np.array([code * box[0], 0.0])  # shifted tiles
+    return coords
+
+
+def test_resolve_overlapping_local_frames_suppresses_tiling_warn():
+    """100 sections sharing one coordinate box: no warn, no 'none' advice."""
+    labels = np.repeat(np.arange(100), 50)  # 100 levels (> TILING_MAX_SECTIONS)
+    obs = _obs(section_id=labels)
+    coords = _tiled_coords(labels, local=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # any warning fails the test
+        section_id, col_used, note = runner.resolve_section_id(
+            list(obs.keys()), obs, labels.size, section_col_arg="auto",
+            coords=coords,
+        )
+    assert col_used == "section_id"
+    assert int(np.unique(section_id).size) == 100
+    # No misleading "pass none" tiling advice for per-section-local frames.
+    if note is not None:
+        assert "tiling artifact" not in note
+        assert "none" not in note
+
+
+def test_resolve_disjoint_tiles_still_warn_with_coords():
+    """Disjoint sub-region tiles (non-overlapping boxes) still trip the warn."""
+    labels = np.repeat(np.arange(60), 300)  # 60 tiles, healthy cells/tile
+    obs = _obs(fov=labels)
+    coords = _tiled_coords(labels, local=False)
+    with pytest.warns(UserWarning, match="tiling artifact"):
+        _sid, col_used, note = runner.resolve_section_id(
+            list(obs.keys()), obs, labels.size, section_col_arg="auto",
+            coords=coords,
+        )
+    assert col_used == "fov"
+    assert note is not None and "tiling artifact" in note
+
+
+def test_resolve_no_coords_keeps_legacy_warn():
+    """Without coords (legacy callers) the level-count warn is unchanged."""
+    labels = np.repeat(np.arange(60), 300)
+    obs = _obs(fov=labels)
+    with pytest.warns(UserWarning, match="tiling artifact"):
+        runner.resolve_section_id(
+            list(obs.keys()), obs, labels.size, section_col_arg="auto"
+        )
+
+
+# --------------------------------------------------------------------------
 # resolve_section_id -- none/single override
 # --------------------------------------------------------------------------
 
