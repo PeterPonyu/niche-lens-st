@@ -688,6 +688,97 @@ def compute_supervised_table(
     return rows
 
 
+# Niche-abundance to per-sample OUTCOME association (#320 / #339). Like the
+# supervised table above this is a SECONDARY artifact -- written to its own
+# outputs/niche_outcome_association.json, never folded into the intrinsic
+# headline metrics.json. The real biological claim is data-gated (it needs a
+# labelled multi-sample cohort: response / grade / survival); the helper is
+# exercised on synthetic planted cohorts by the tests until such data lands.
+def _infer_label_kind(values) -> str | None:
+    """Pick the association test for a per-sample label, or None if undecidable.
+
+    Exactly 2 distinct values -> ``"binary"`` (Mann-Whitney U). More than 2 *and*
+    numeric -> ``"continuous"`` (Spearman). Fewer than 2, or >2 non-numeric
+    (categorical, unsupported here), -> ``None`` (the caller skips the artifact).
+    """
+    arr = np.asarray(values, dtype=object).reshape(-1)
+    distinct = np.unique(arr)
+    if distinct.size < 2:
+        return None
+    if distinct.size == 2:
+        return "binary"
+    try:
+        np.asarray(arr, dtype=np.float64)
+    except (ValueError, TypeError):
+        return None
+    return "continuous"
+
+
+def compute_outcome_table(
+    prototype_id,
+    sample_id,
+    outcome_values,
+    *,
+    label_kind: str = "auto",
+    n_prototypes: int | None = None,
+):
+    """Per-prototype niche-abundance -> per-sample outcome association, or None.
+
+    Reduces per-cell ``(sample_id, prototype_id)`` to a (sample x prototype)
+    relative-abundance matrix, pulls each sample's outcome label (which MUST be
+    constant within the sample -- a non-constant outcome is a data bug, raised,
+    never silently averaged), and runs the compositional, sample-unit,
+    BH-FDR-controlled test in :func:`nichelens_st.outcome.niche_outcome_association`.
+
+    Returns the JSON-serialisable association payload, or ``None`` when the test
+    is undefined: fewer than 2 samples, or (``label_kind="binary"``) a label that
+    is not exactly two groups. ``label_kind="auto"`` infers the kind via
+    :func:`_infer_label_kind`.
+    """
+    from nichelens_st.outcome import (
+        niche_outcome_association,
+        sample_prototype_abundance,
+    )
+
+    proto = np.asarray(prototype_id).reshape(-1)
+    sid = np.asarray(sample_id).reshape(-1)
+    outc = np.asarray(outcome_values).reshape(-1)
+    if not (proto.shape[0] == sid.shape[0] == outc.shape[0]):
+        raise ValueError(
+            "prototype_id, sample_id, outcome_values must align per cell; got "
+            f"{proto.shape[0]}, {sid.shape[0]}, {outc.shape[0]}"
+        )
+    if n_prototypes is None:
+        n_prototypes = int(proto.max()) + 1 if proto.size else 0
+
+    abundance, samples = sample_prototype_abundance(
+        sid, proto, n_prototypes=int(n_prototypes)
+    )
+    if samples.shape[0] < 2:
+        return None
+
+    per_sample = np.empty(samples.shape[0], dtype=object)
+    for i, s in enumerate(samples):
+        vals = np.unique(outc[sid == s])
+        if vals.size != 1:
+            raise ValueError(
+                f"sample {s!r} has a non-constant outcome {vals.tolist()}; the "
+                "outcome must be one value per sample"
+            )
+        per_sample[i] = vals[0]
+
+    kind = label_kind
+    if kind == "auto":
+        inferred = _infer_label_kind(per_sample)
+        if inferred is None:
+            return None
+        kind = inferred
+    elif kind == "binary" and np.unique(per_sample).size != 2:
+        return None
+
+    return niche_outcome_association(abundance, per_sample, label_kind=kind)
+
+
 def _intrinsic_metrics(result, edges, section_id, seed):
     """Intrinsic-only metrics: prototype structure, niche Moran's I, silhouette."""
     from nichelens_st.metrics import morans_i
@@ -907,7 +998,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Per-cell total-count QC floor: cells with fewer total transcript "
             f"counts are dropped BEFORE normalization (default {DEFAULT_MIN_COUNTS}, "
-            "a conservative MERFISH floor). The primary GSE282124 input had 76% "
+            "a conservative MERFISH floor). The primary GSE282124 input had 76%% "
             "zero-count cells whose normalize_total divide-by-zero produced NaN "
             "rows that poisoned the fit; this removes them."
         ),
@@ -954,6 +1045,39 @@ def _build_parser() -> argparse.ArgumentParser:
             "write outputs/interaction_summary.{parquet,csv}. OFF by default; "
             "requires the optional [data] extra (squidpy/OmniPath) -- the run "
             "errors actionably if invoked without it."
+        ),
+    )
+    parser.add_argument(
+        "--outcome-col",
+        default=None,
+        help=(
+            "Per-sample OUTCOME label obs column (e.g. response / grade / "
+            "survival). When set together with --sample-col, write a SECONDARY "
+            "niche-abundance->outcome association table (#320/#339) to "
+            "outputs/niche_outcome_association.json: per-prototype effect size + "
+            "BH-FDR q with the SAMPLE as the unit (no per-cell pseudo-replication) "
+            "and a compositional (CLR) transform. OFF by default and kept OUT of "
+            "the intrinsic headline metrics.json. The label must be constant "
+            "within a sample."
+        ),
+    )
+    parser.add_argument(
+        "--sample-col",
+        default=None,
+        help=(
+            "Per-cell SAMPLE/replicate id obs column for the outcome association "
+            "(#320/#339); required when --outcome-col is set. This is the "
+            "biological-replicate unit, NOT the per-section graph tile."
+        ),
+    )
+    parser.add_argument(
+        "--outcome-kind",
+        choices=("auto", "binary", "continuous"),
+        default="auto",
+        help=(
+            "Association test for --outcome-col: 'binary' (Mann-Whitney U), "
+            "'continuous' (Spearman), or 'auto' (default; 2 groups -> binary, "
+            ">2 numeric -> continuous)."
         ),
     )
     return parser
@@ -1036,6 +1160,22 @@ def main() -> int:
                 for c in SUPERVISED_REFERENCES
                 if c in obs.columns
             }
+        # Per-cell sample id + outcome label for the optional secondary outcome
+        # association (#320/#339), aligned to the same post-QC fitted rows. Both
+        # columns must be present; missing/absent obs -> no outcome inputs.
+        outcome_inputs = None
+        if (
+            args.outcome_col
+            and args.sample_col
+            and obs is not None
+            and hasattr(obs, "columns")
+            and args.outcome_col in obs.columns
+            and args.sample_col in obs.columns
+        ):
+            outcome_inputs = {
+                "sample_id": np.asarray(obs[args.sample_col]),
+                "outcome": np.asarray(obs[args.outcome_col]),
+            }
         return dict(
             path=path,
             label=label,
@@ -1051,6 +1191,7 @@ def main() -> int:
             metrics=metrics,
             notes_extra=notes_extra,
             ref_labels=ref_labels,
+            outcome_inputs=outcome_inputs,
         )
 
     run = None
@@ -1164,6 +1305,52 @@ def main() -> int:
             supervised_rel = "outputs/supervised_metrics.json"
             notes.append(f"supervised_metrics rows={len(table)} (secondary; #288)")
 
+    # Secondary niche-abundance->outcome association table (#320/#339), OFF by
+    # default. Needs --outcome-col + --sample-col present in obs; the real claim
+    # is data-gated. Kept OUT of the intrinsic headline metrics.json.
+    outcome_rel = None
+    outcome_payload = None
+    if args.outcome_col:
+        if not args.sample_col:
+            notes.append("--outcome-col set without --sample-col; outcome skipped")
+        elif not run.get("outcome_inputs"):
+            notes.append(
+                f"outcome association requested but obs lacks '{args.outcome_col}'"
+                f"/'{args.sample_col}'; skipped"
+            )
+        else:
+            oi = run["outcome_inputs"]
+            table = compute_outcome_table(
+                run["result"].prototype_id,
+                oi["sample_id"],
+                oi["outcome"],
+                label_kind=args.outcome_kind,
+                n_prototypes=N_PROTOTYPES,
+            )
+            if table is None:
+                notes.append(
+                    "outcome association undefined (<2 samples or label not 2 "
+                    "groups); skipped"
+                )
+            else:
+                outcome_payload = {
+                    "caveat": (
+                        "SECONDARY: niche-abundance vs a per-sample outcome. The "
+                        "SAMPLE is the unit (no per-cell pseudo-replication); "
+                        "abundances are CLR-transformed; q is Benjamini-Hochberg. "
+                        "Intrinsic metrics.json remains the headline; the real "
+                        "biological claim is data-gated (#320/#339)."
+                    ),
+                    "sample_col": args.sample_col,
+                    "outcome_col": args.outcome_col,
+                    **table,
+                }
+                outcome_rel = "outputs/niche_outcome_association.json"
+                notes.append(
+                    f"niche_outcome_association n_samples={table['n_samples']} "
+                    f"(secondary; #320/#339)"
+                )
+
     # Write outputs/ artifacts: niche.npz (H, prototype_id) + proto_kind.json.
     card_id = results_contract.dataset_card_id([str(used_path)])
     results_dir = _REPO_ROOT / "results"
@@ -1175,6 +1362,8 @@ def main() -> int:
         outputs_manifest["interaction_summary"] = interaction_rel
     if supervised_rel is not None:
         outputs_manifest["supervised_metrics"] = supervised_rel
+    if outcome_rel is not None:
+        outputs_manifest["niche_outcome_association"] = outcome_rel
     run_metadata = {
         "dataset_paths": [str(used_path)],
         "n_obs": run["n_obs"],
@@ -1246,6 +1435,15 @@ def main() -> int:
         ) as fh:
             json.dump(supervised_payload, fh, indent=2)
         print(f"supervised_metrics -> {outputs_dir / Path(supervised_rel).name}")
+
+    if outcome_rel is not None and outcome_payload is not None:
+        with open(
+            outputs_dir / Path(outcome_rel).name, "w", encoding="utf-8"
+        ) as fh:
+            json.dump(outcome_payload, fh, indent=2)
+        print(
+            f"niche_outcome_association -> {outputs_dir / Path(outcome_rel).name}"
+        )
 
     print(f"dataset used: {run['label']} ({used_path})")
     print(f"n_obs={run['n_obs']} n_vars={run['n_vars']} device={device}")
