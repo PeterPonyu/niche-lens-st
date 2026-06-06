@@ -56,6 +56,9 @@ try:  # pragma: no cover - the import-failure branch needs torch uninstalled
     torch = importlib.import_module("torch")
     nn = torch.nn
     Tensor = torch.Tensor
+    # Submodules are not auto-imported by ``import torch``; the minibatch InfoNCE
+    # path uses ``torch.utils.checkpoint.checkpoint`` to bound peak memory (#360).
+    importlib.import_module("torch.utils.checkpoint")
     TORCH_AVAILABLE = True
 except ImportError:
     pass
@@ -229,6 +232,29 @@ def _info_nce(
     return torch.nn.functional.cross_entropy(sim, targets)
 
 
+def _nt_xent_block(zb1: "Tensor", zb2: "Tensor", tau: float) -> "Tensor":
+    """NT-Xent over a single minibatch block's two views (the O(b^2) kernel).
+
+    Builds the block's ``(2m, 2m)`` similarity matrix (``m = zb1.shape[0]``),
+    masks self-similarity, and returns the mean cross-entropy with each anchor's
+    matched view as its positive. Factored out so the per-block similarity graph
+    can be wrapped in a gradient checkpoint by :func:`_info_nce_minibatch`.
+    """
+    safe_tau = max(float(tau), _INFO_NCE_TAU_MIN)
+    m = zb1.shape[0]
+    zb = torch.cat([zb1, zb2], dim=0)  # (2m, d)
+    sim = zb @ zb.t() / safe_tau  # (2m, 2m) -- O(b^2), not O(n^2)
+    diag = torch.eye(2 * m, dtype=torch.bool, device=zb.device)
+    sim = sim.masked_fill(diag, float("-inf"))
+    targets = torch.cat(
+        [
+            torch.arange(m, 2 * m, device=zb.device),
+            torch.arange(0, m, device=zb.device),
+        ]
+    )
+    return torch.nn.functional.cross_entropy(sim, targets)
+
+
 def _info_nce_minibatch(
     z1: "Tensor",
     z2: "Tensor",
@@ -254,40 +280,56 @@ def _info_nce_minibatch(
     semantics, with ``batch_size`` controlling how many negatives each anchor
     sees. The only approximation versus the current code is the *negative
     set size* (``2b - 2`` instead of ``2n - 2``); the per-anchor loss form,
-    temperature, and positive assignment are identical. Peak similarity-matrix
-    memory is ``O(b^2)`` per minibatch, independent of ``n``. Losses are
-    averaged over minibatches so the returned scalar is comparable in scale to
-    the full-batch loss.
+    temperature, and positive assignment are identical. Losses are averaged
+    over minibatches so the returned scalar is comparable in scale to the
+    full-batch loss.
+
+    Memory bound (#360)
+    -------------------
+    Each block's ``O(b^2)`` similarity matrix is correct, but naively summing
+    ``n/b`` block losses into one tensor and calling ``backward()`` *once*
+    retains every block's autograd graph simultaneously -- peak ``O(n*b)``, NOT
+    ``O(b^2)`` (this OOM-killed the 734k CODEX primary at ~57 GB). To restore the
+    true ``O(b^2)`` peak we wrap each block in a **gradient checkpoint**: the
+    block's ``(2m, 2m)`` graph is discarded after the forward and recomputed one
+    block at a time during backward, so only one similarity matrix is ever
+    resident. Checkpointing recomputes the same deterministic ops, so the loss
+    value and gradients are identical to the naive accumulation. When grad is
+    disabled (eval / no requires_grad) the checkpoint is skipped.
 
     A fresh random permutation (seeded via ``generator``) is drawn every call
     so, across epochs, every anchor is paired against a changing negative set.
     """
-    safe_tau = max(float(tau), _INFO_NCE_TAU_MIN)
     n = z1.shape[0]
     b = int(batch_size)
     if b <= 0 or b >= n:
         # Degenerate to the exact full-batch loss (single block covers all).
         return _info_nce(z1, z2, tau)
 
+    use_checkpoint = torch.is_grad_enabled() and (
+        z1.requires_grad or z2.requires_grad
+    )
     perm = torch.randperm(n, generator=generator, device=z1.device)
     total = z1.new_zeros(())
     n_blocks = 0
     for start in range(0, n, b):
         idx = perm[start : start + b]
-        m = idx.shape[0]
         zb1 = z1[idx]
         zb2 = z2[idx]
-        zb = torch.cat([zb1, zb2], dim=0)  # (2m, d)
-        sim = zb @ zb.t() / safe_tau  # (2m, 2m) -- O(b^2), not O(n^2)
-        diag = torch.eye(2 * m, dtype=torch.bool, device=zb.device)
-        sim = sim.masked_fill(diag, float("-inf"))
-        targets = torch.cat(
-            [
-                torch.arange(m, 2 * m, device=zb.device),
-                torch.arange(0, m, device=zb.device),
-            ]
-        )
-        total = total + torch.nn.functional.cross_entropy(sim, targets)
+        if use_checkpoint:
+            # use_reentrant=False supports non-tensor args (tau) and grad-on
+            # inputs; preserve_rng_state=False since the block draws no RNG.
+            block = torch.utils.checkpoint.checkpoint(
+                _nt_xent_block,
+                zb1,
+                zb2,
+                tau,
+                use_reentrant=False,
+                preserve_rng_state=False,
+            )
+        else:
+            block = _nt_xent_block(zb1, zb2, tau)
+        total = total + block
         n_blocks += 1
     return total / n_blocks
 
