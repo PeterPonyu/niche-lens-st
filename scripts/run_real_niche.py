@@ -562,6 +562,132 @@ def _conserved_fraction(proto_kind, n_sections: int):
     return float(conserved / len(scorable))
 
 
+# Secondary (caveated) supervised niche-recovery scoring (#288). The author
+# labels on the CODEX primary (obs['niche'], obs['cell_type']) are
+# CLUSTERING-DERIVED, not hand-annotated, so per the project's intrinsic-first /
+# GT-skeptic rule these ARI/NMI/AMI/macro-F1 scores are written to a SEPARATE
+# outputs/supervised_metrics.json -- never folded into the headline metrics.json.
+SUPERVISED_REFERENCES = ("niche", "cell_type")
+SUPERVISED_SEEDS = (0, 1, 2)
+SUPERVISED_KMEANS_ITERS = 25
+# Tokens that mark a reference label as "unlabeled" (excluded from the SUPERVISED
+# score only -- such cells still participate in the unsupervised fit).
+_UNLABELED_TOKENS = frozenset({"nan", "none", "na", "null", ""})
+
+
+def _unlabeled_mask(values) -> np.ndarray:
+    """Boolean mask: True where a reference label is missing/unlabeled.
+
+    Treats real NaN/None and the string spellings in :data:`_UNLABELED_TOKENS`
+    (``'nan'`` from a stringified categorical, ``''``, ...) as unlabeled. Pure;
+    operates on any array-like of labels.
+    """
+    arr = np.asarray(values, dtype=object).reshape(-1)
+    tokens = np.array(
+        [str(v).strip().lower() for v in arr.tolist()], dtype=object
+    )
+    return np.array([t in _UNLABELED_TOKENS for t in tokens], dtype=bool)
+
+
+def supervised_scores(pred_id, ref_values):
+    """ARI/NMI/AMI/macro-F1 of ``pred_id`` vs a reference label array, or None.
+
+    Unlabeled reference cells (:func:`_unlabeled_mask`) are dropped from the
+    score ONLY (they remain in the fit). The reference is factorized to integer
+    codes. Returns ``None`` when fewer than 2 cells remain or the reference has
+    fewer than 2 distinct classes (the metrics are undefined / degenerate).
+    """
+    from nichelens_st.metrics import (
+        adjusted_mutual_info,
+        adjusted_rand,
+        macro_f1,
+        normalized_mutual_info,
+    )
+
+    pred = np.asarray(pred_id).reshape(-1)
+    ref = np.asarray(ref_values, dtype=object).reshape(-1)
+    unlabeled = _unlabeled_mask(ref)
+    keep = ~unlabeled
+    n_scored = int(keep.sum())
+    if n_scored < 2:
+        return None
+    pred_k = pred[keep]
+    _, ref_codes = np.unique(ref[keep].astype(str), return_inverse=True)
+    n_ref_classes = int(ref_codes.max()) + 1 if ref_codes.size else 0
+    if n_ref_classes < 2:
+        return None
+    return {
+        "n_scored": n_scored,
+        "n_unlabeled_excluded": int(unlabeled.sum()),
+        "n_ref_classes": n_ref_classes,
+        "ari": float(adjusted_rand(pred_k, ref_codes)),
+        "nmi": float(normalized_mutual_info(pred_k, ref_codes)),
+        "ami": float(adjusted_mutual_info(pred_k, ref_codes)),
+        "macro_f1": float(macro_f1(pred_k, ref_codes)),
+    }
+
+
+def compute_supervised_table(
+    H,
+    prototype_id,
+    ref_labels,
+    *,
+    seeds=SUPERVISED_SEEDS,
+    kmeans_iters=SUPERVISED_KMEANS_ITERS,
+):
+    """Build the secondary niche-recovery rows (#288).
+
+    For each reference in ``ref_labels`` (name -> per-cell label array), scores:
+
+    * ``model_prototypes`` -- the learned k-means prototype assignment (the
+      model's own K), one row; and
+    * ``kmeans_matched_k`` -- k-means on the learned embedding ``H`` at
+      ``k = n_ref_classes`` (matched to the reference's granularity for a
+      like-for-like ARI/NMI), one row per seed in ``seeds``.
+
+    Returns a list of flat dict rows (assignment, reference, k, seed, + the
+    :func:`supervised_scores` fields). References with <2 usable classes are
+    skipped. Pure aside from importing the model's deterministic k-means.
+    """
+    from nichelens_st.model import _kmeans
+
+    H = np.asarray(H, dtype=np.float32)
+    proto = np.asarray(prototype_id).reshape(-1)
+    proto_k = int(proto.max()) + 1 if proto.size else 0
+    rows = []
+    for ref_name, ref_values in ref_labels.items():
+        base = supervised_scores(proto, ref_values)
+        if base is None:
+            continue
+        rows.append(
+            {
+                "assignment": "model_prototypes",
+                "reference": ref_name,
+                "k": proto_k,
+                "seed": None,
+                **base,
+            }
+        )
+        k = int(base["n_ref_classes"])
+        if k < 2:
+            continue
+        for seed in seeds:
+            labels = _kmeans(H, k, int(kmeans_iters), int(seed))
+            sc = supervised_scores(labels, ref_values)
+            if sc is None:
+                continue
+            rows.append(
+                {
+                    "assignment": "kmeans_matched_k",
+                    "reference": ref_name,
+                    "k": k,
+                    "seed": int(seed),
+                    **sc,
+                }
+            )
+    return rows
+
+
 def _intrinsic_metrics(result, edges, section_id, seed):
     """Intrinsic-only metrics: prototype structure, niche Moran's I, silhouette."""
     from nichelens_st.metrics import morans_i
@@ -808,6 +934,19 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--supervised-metrics",
+        action="store_true",
+        help=(
+            "Also write a SECONDARY niche-recovery table (#288) to "
+            "outputs/supervised_metrics.json: ARI/NMI/AMI/macro-F1 of the learned "
+            "niches vs author obs['niche']/obs['cell_type'], for the model "
+            "prototypes and matched-K k-means (>=3 seeds). OFF by default. These "
+            "author labels are CLUSTERING-DERIVED (GT-skeptic), so the table is "
+            "kept separate from the intrinsic headline metrics.json and is not a "
+            "paper headline."
+        ),
+    )
+    parser.add_argument(
         "--interaction-summary",
         action="store_true",
         help=(
@@ -886,6 +1025,17 @@ def main() -> int:
             adata=adata if args.interaction_summary else None,
         )
         metrics, notes_extra = _intrinsic_metrics(result, edges, section_id, seed)
+        # Capture author reference labels (aligned to the post-QC cells, i.e. the
+        # fitted rows) for the optional secondary supervised table (#288). Guarded
+        # so a fit-stub AnnData without ``.obs`` (tests) yields no references.
+        ref_labels = {}
+        obs = getattr(adata, "obs", None)
+        if obs is not None and hasattr(obs, "columns"):
+            ref_labels = {
+                c: np.asarray(obs[c])
+                for c in SUPERVISED_REFERENCES
+                if c in obs.columns
+            }
         return dict(
             path=path,
             label=label,
@@ -900,6 +1050,7 @@ def main() -> int:
             effective_batch=eff_batch,
             metrics=metrics,
             notes_extra=notes_extra,
+            ref_labels=ref_labels,
         )
 
     run = None
@@ -981,6 +1132,38 @@ def main() -> int:
         else:
             notes.append("interaction_summary requested but result was empty")
 
+    # Secondary supervised niche-recovery table (#288), OFF by default. Computed
+    # here so its output path can be recorded in run_metadata.outputs; the file
+    # is written after the contract creates outputs_dir. The author labels are
+    # clustering-derived (GT-skeptic) -> kept OUT of the headline metrics.json.
+    supervised_rel = None
+    supervised_payload = None
+    if args.supervised_metrics:
+        ref_labels = run.get("ref_labels") or {}
+        if not ref_labels:
+            notes.append(
+                "supervised metrics requested but no reference labels "
+                f"({'/'.join(SUPERVISED_REFERENCES)}) in obs; skipped"
+            )
+        else:
+            table = compute_supervised_table(
+                run["result"].H, run["result"].prototype_id, ref_labels
+            )
+            supervised_payload = {
+                "caveat": (
+                    "SECONDARY / GT-SKEPTIC: author obs labels are "
+                    "clustering-derived, not hand-annotated; intrinsic metrics "
+                    "(metrics.json) remain the headline. Unlabeled cells are "
+                    "excluded from the supervised score only, not from the fit."
+                ),
+                "references": sorted(ref_labels.keys()),
+                "seeds": list(SUPERVISED_SEEDS),
+                "kmeans_iters": SUPERVISED_KMEANS_ITERS,
+                "rows": table,
+            }
+            supervised_rel = "outputs/supervised_metrics.json"
+            notes.append(f"supervised_metrics rows={len(table)} (secondary; #288)")
+
     # Write outputs/ artifacts: niche.npz (H, prototype_id) + proto_kind.json.
     card_id = results_contract.dataset_card_id([str(used_path)])
     results_dir = _REPO_ROOT / "results"
@@ -990,6 +1173,8 @@ def main() -> int:
     }
     if interaction_rel is not None:
         outputs_manifest["interaction_summary"] = interaction_rel
+    if supervised_rel is not None:
+        outputs_manifest["supervised_metrics"] = supervised_rel
     run_metadata = {
         "dataset_paths": [str(used_path)],
         "n_obs": run["n_obs"],
@@ -1054,6 +1239,13 @@ def main() -> int:
             run["result"].interaction_summary, outputs_dir, interaction_rel
         )
         print(f"interaction_summary -> {outputs_dir / Path(interaction_rel).name}")
+
+    if supervised_rel is not None and supervised_payload is not None:
+        with open(
+            outputs_dir / Path(supervised_rel).name, "w", encoding="utf-8"
+        ) as fh:
+            json.dump(supervised_payload, fh, indent=2)
+        print(f"supervised_metrics -> {outputs_dir / Path(supervised_rel).name}")
 
     print(f"dataset used: {run['label']} ({used_path})")
     print(f"n_obs={run['n_obs']} n_vars={run['n_vars']} device={device}")
