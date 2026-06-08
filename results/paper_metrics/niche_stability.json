@@ -1,0 +1,130 @@
+{
+  "dataset_path": "/home/zeyufu/Desktop/labs/active/spatial-omics-reform/data/processed/codex_spleen_goltsev2018/anndata.h5ad",
+  "n_obs": 734101,
+  "n_sections": 565,
+  "section_col": "section_id",
+  "n_seeds": 3,
+  "n_prototypes": 10,
+  "seed_stability_ari": 0.46070062034542975,
+  "seed_stability_ari_sd": 0.01607021155240565,
+  "seed_stability_ari_min": 0.44276457948811787,
+  "ari_matrix": [
+    [
+      1.0,
+      0.4817558810621844,
+      0.45758140048598694
+    ],
+    [
+      0.4817558810621844,
+      1.0,
+      0.44276457948811787
+    ],
+    [
+      0.45758140048598694,
+      0.44276457948811787,
+      1.0
+    ]
+  ],
+  "conserved_fraction": 0.1,
+  "coverage_sweep": [
+    {
+      "min_section_coverage": 1.0,
+      "conserved_fraction": 0.1,
+      "section_overlap_rate": 1.0,
+      "n_conserved": 1,
+      "n_prototypes": 10
+    },
+    {
+      "min_section_coverage": 0.9,
+      "conserved_fraction": 0.4,
+      "section_overlap_rate": 0.7,
+      "n_conserved": 4,
+      "n_prototypes": 10
+    },
+    {
+      "min_section_coverage": 0.8,
+      "conserved_fraction": 0.8,
+      "section_overlap_rate": 0.3,
+      "n_conserved": 8,
+      "n_prototypes": 10
+    },
+    {
+      "min_section_coverage": 0.7,
+      "conserved_fraction": 0.9,
+      "section_overlap_rate": 0.2,
+      "n_conserved": 9,
+      "n_prototypes": 10
+    },
+    {
+      "min_section_coverage": 0.6,
+      "conserved_fraction": 0.9,
+      "section_overlap_rate": 0.2,
+      "n_conserved": 9,
+      "n_prototypes": 10
+    },
+    {
+      "min_section_coverage": 0.5,
+      "conserved_fraction": 1.0,
+      "section_overlap_rate": 0.1,
+      "n_conserved": 10,
+      "n_prototypes": 10
+    }
+  ],
+  "prototype_matching_seed0_seed1": [
+    {
+      "proto_a": 0,
+      "proto_b": 3,
+      "overlap": 48190
+    },
+    {
+      "proto_a": 1,
+      "proto_b": 0,
+      "overlap": 67744
+    },
+    {
+      "proto_a": 2,
+      "proto_b": 8,
+      "overlap": 11071
+    },
+    {
+      "proto_a": 3,
+      "proto_b": 9,
+      "overlap": 53204
+    },
+    {
+      "proto_a": 4,
+      "proto_b": 1,
+      "overlap": 56083
+    },
+    {
+      "proto_a": 5,
+      "proto_b": 5,
+      "overlap": 31919
+    },
+    {
+      "proto_a": 6,
+      "proto_b": 2,
+      "overlap": 34964
+    },
+    {
+      "proto_a": 7,
+      "proto_b": 6,
+      "overlap": 67862
+    },
+    {
+      "proto_a": 8,
+      "proto_b": 4,
+      "overlap": 48293
+    },
+    {
+      "proto_a": 9,
+      "proto_b": 7,
+      "overlap": 70121
+    }
+  ],
+  "normalization": {
+    "applied": false,
+    "method": "none"
+  },
+  "paper_claim_ready": false
+}

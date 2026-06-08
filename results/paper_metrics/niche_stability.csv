@@ -1,0 +1,7 @@
+min_section_coverage,conserved_fraction,section_overlap_rate,n_conserved,n_prototypes
+1.00,0.1000,1.0000,1,10
+0.90,0.4000,0.7000,4,10
+0.80,0.8000,0.3000,8,10
+0.70,0.9000,0.2000,9,10
+0.60,0.9000,0.2000,9,10
+0.50,1.0000,0.1000,10,10
