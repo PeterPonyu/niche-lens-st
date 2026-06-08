@@ -29,7 +29,9 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install ruff
-        run: python -m pip install --upgrade pip ruff
+        # Pinned (not floating) so a future ruff release's new default rules
+        # can't redden main without a deliberate bump. Last green on 0.15.16.
+        run: python -m pip install --upgrade pip && python -m pip install ruff==0.15.16
       - name: Ruff lint (config in pyproject.toml)
         run: ruff check .
 
