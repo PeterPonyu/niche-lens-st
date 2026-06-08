@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0.0",
+  "source_script_reference": "scripts/emit_scalability_table.py",
+  "columns": [
+    "dataset",
+    "n_cells",
+    "wall_clock_s",
+    "peak_rss_gb",
+    "throughput_cells_per_s",
+    "infonce_mode",
+    "status"
+  ],
+  "paper_claim_ready": false,
+  "fallback": true,
+  "rows": [
+    {
+      "dataset": "niche_merfish_slice",
+      "n_cells": 5488,
+      "wall_clock_s": 1.2941646575927734,
+      "peak_rss_gb": 2.022825984,
+      "throughput_cells_per_s": 4240.573228300038,
+      "infonce_mode": "full-batch",
+      "status": "fallback-to-slice"
+    },
+    {
+      "dataset": "single-section full-batch (#148/#302)",
+      "n_cells": 124938,
+      "wall_clock_s": null,
+      "peak_rss_gb": null,
+      "throughput_cells_per_s": null,
+      "infonce_mode": "full-batch",
+      "status": "OOM (full-batch)"
+    },
+    {
+      "dataset": "xenium_prime_5k_cancer",
+      "n_cells": 699000,
+      "wall_clock_s": null,
+      "peak_rss_gb": null,
+      "throughput_cells_per_s": null,
+      "infonce_mode": "minibatch",
+      "status": "download-blocked (#300)"
+    },
+    {
+      "dataset": "codex_spleen_goltsev2018",
+      "n_cells": 734101,
+      "wall_clock_s": 121.89705419540405,
+      "peak_rss_gb": 4.498341888,
+      "throughput_cells_per_s": 6022.303039606007,
+      "infonce_mode": "full-batch",
+      "status": "ok"
+    },
+    {
+      "dataset": "abc_atlas_zhuang_merfish",
+      "n_cells": 4200000,
+      "wall_clock_s": null,
+      "peak_rss_gb": null,
+      "throughput_cells_per_s": null,
+      "infonce_mode": "minibatch",
+      "status": "download-blocked (#300)"
+    },
+    {
+      "dataset": "vizgen_ffpe_io_merfish",
+      "n_cells": 9000000,
+      "wall_clock_s": null,
+      "peak_rss_gb": null,
+      "throughput_cells_per_s": null,
+      "infonce_mode": "minibatch",
+      "status": "download-blocked (#300)"
+    }
+  ]
+}
