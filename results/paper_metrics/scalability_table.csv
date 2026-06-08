@@ -1,0 +1,8 @@
+# WARNING: the fallback-to-slice row is the downsized 5,488-cell MERFISH section, NOT an atlas-scale run. Do NOT cite its scale as representative.
+dataset,n_cells,wall_clock_s,peak_rss_gb,throughput_cells_per_s,infonce_mode,status
+niche_merfish_slice,5488,1.2942,2.0228,4240.57,full-batch,fallback-to-slice
+single-section full-batch (#148/#302),124938,,,,full-batch,OOM (full-batch)
+xenium_prime_5k_cancer,699000,,,,minibatch,download-blocked (#300)
+codex_spleen_goltsev2018,734101,121.8971,4.4983,6022.30,full-batch,ok
+abc_atlas_zhuang_merfish,4200000,,,,minibatch,download-blocked (#300)
+vizgen_ffpe_io_merfish,9000000,,,,minibatch,download-blocked (#300)

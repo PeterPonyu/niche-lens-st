@@ -1,0 +1,33 @@
+{
+  "_doc": "Declared (non-runnable) regimes for the #315 scalability table. These carry an honest status and NO fabricated runtime/peak-RSS numbers. Real, runnable rows come from run_metadata.json via emit_scalability_table.py; this file only adds the COMPUTE-wall (OOM) and DOWNLOAD-blocked regimes so the table tells the full scaling story (issue #315).",
+  "regimes": [
+    {
+      "dataset": "single-section full-batch (#148/#302)",
+      "n_cells": 124938,
+      "status": "OOM (full-batch)",
+      "infonce_mode": "full-batch",
+      "note": "A single 124,938-cell graph makes the full-batch InfoNCE matrix O(n^2) ~= 232 GiB -> OOM by design. Minibatch (batch_size>0, #302) is required at this single-section scale; this is the architectural scaling wall, independent of any one dataset's biology (cf. the codex primary's 734k row runs full-batch cheaply because it is 565 small per-section graphs)."
+    },
+    {
+      "dataset": "xenium_prime_5k_cancer",
+      "n_cells": 699000,
+      "status": "download-blocked (#300)",
+      "infonce_mode": "minibatch",
+      "note": "112k-699k cells; fetch-after-download (#300); minibatch-only at this scale."
+    },
+    {
+      "dataset": "abc_atlas_zhuang_merfish",
+      "n_cells": 4200000,
+      "status": "download-blocked (#300)",
+      "infonce_mode": "minibatch",
+      "note": "~4.2M cells / 147 sections; fetch-after-download (#300); minibatch-only."
+    },
+    {
+      "dataset": "vizgen_ffpe_io_merfish",
+      "n_cells": 9000000,
+      "status": "download-blocked (#300)",
+      "infonce_mode": "minibatch",
+      "note": "~9M cells / 16 samples; fetch-after-download (#300); minibatch-only."
+    }
+  ]
+}
