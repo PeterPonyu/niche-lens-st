@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "dataset_card_id": "niche_merfish_slice",
-  "source_sha256": "b6c643f093968a3ebe9f4006a9782e3766271cb6c38b77137efb41f71a5a2ee3",
+  "source_sha256": "70cbe998312eb25b580c7f7979dcec137eb40c56327c18f6460e9b8cfca3095d",
   "columns": [
     "domain_ari",
     "domain_ami",
@@ -13,22 +13,22 @@
     "niche_morans_i"
   ],
   "paper_claim_ready": false,
-  "fallback_warning": "DOWNSIZED SINGLE-SECTION FALLBACK, NOT THE ATLAS-SCALE RUN (detected via run_metadata.notes). Do NOT cite as atlas-scale results.",
+  "fallback_warning": "DOWNSIZED SINGLE-SECTION FALLBACK, NOT THE ATLAS-SCALE RUN (5488-cell single MERFISH section; the conserved/sample-specific distinction is degenerate and the scale is not representative of the target dataset). Do NOT cite as atlas-scale results.",
   "rows": [
     {
       "method": "niche-lens-st",
       "metrics": {
-        "domain_ari": 0.17249793378650613,
-        "domain_ami": 0.2902825185571234,
-        "domain_nmi": 0.2922507614918338,
-        "domain_macro_f1": 0.362934343236626,
-        "domain_homogeneity": 0.3250691558214125,
-        "domain_accuracy": 0.4037900874635568,
-        "embedding_silhouette": 0.24258270859718323,
-        "niche_morans_i": 0.4229928376898637
+        "domain_ari": null,
+        "domain_ami": null,
+        "domain_nmi": null,
+        "domain_macro_f1": null,
+        "domain_homogeneity": null,
+        "domain_accuracy": null,
+        "embedding_silhouette": 0.2053280919790268,
+        "niche_morans_i": 0.5889666788972447
       },
       "source_path": "/home/zeyufu/Desktop/labs/active/spatial-omics-reform/niche-lens-st/results/niche-lens-st/metrics.json",
-      "git_sha": "7b7534d",
+      "git_sha": "a1f7062",
       "dataset_card_id": "niche_merfish_slice"
     },
     {
@@ -83,9 +83,9 @@
   "provenance": {
     "niche-lens-st": {
       "source_path": "/home/zeyufu/Desktop/labs/active/spatial-omics-reform/niche-lens-st/results/niche-lens-st/metrics.json",
-      "git_sha": "7b7534d",
+      "git_sha": "a1f7062",
       "dataset_card_id": "niche_merfish_slice",
-      "source_sha256": "b6c643f093968a3ebe9f4006a9782e3766271cb6c38b77137efb41f71a5a2ee3"
+      "source_sha256": "70cbe998312eb25b580c7f7979dcec137eb40c56327c18f6460e9b8cfca3095d"
     },
     "diffusion": {
       "source_path": "/home/zeyufu/Desktop/labs/active/spatial-omics-reform/niche-lens-st/results/baselines/diffusion/niche-lens-st/metrics.json",

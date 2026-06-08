@@ -4,11 +4,11 @@
 
 > ⚠️ **SINGLE-SECTION FALLBACK DATA** — results are from the downsized 5,488-cell MERFISH section, **NOT** the 124k-cell atlas run. Do NOT cite as atlas-scale results.
 
-> *Fallback note: DOWNSIZED SINGLE-SECTION FALLBACK, NOT THE ATLAS-SCALE RUN (detected via run_metadata.notes). Do NOT cite as atlas-scale results.*
+> *Fallback note: DOWNSIZED SINGLE-SECTION FALLBACK, NOT THE ATLAS-SCALE RUN (5488-cell single MERFISH section; the conserved/sample-specific distinction is degenerate and the scale is not representative of the target dataset). Do NOT cite as atlas-scale results.*
 
 | method | domain_ari | domain_ami | domain_nmi | domain_macro_f1 | domain_homogeneity | domain_accuracy | embedding_silhouette | niche_morans_i |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| niche-lens-st | 0.1725 | 0.2903 | 0.2923 | 0.3629 | 0.3251 | 0.4038 | 0.2426 | 0.4230 |
+| niche-lens-st | NA | NA | NA | NA | NA | NA | 0.2053 | 0.5890 |
 | diffusion | NA | NA | NA | NA | NA | NA | 0.1071 | 0.8240 |
 | neighborhood | NA | NA | NA | NA | NA | NA | 0.0956 | 0.4214 |
 | pca | NA | NA | NA | NA | NA | NA | 0.1568 | 0.2709 |
