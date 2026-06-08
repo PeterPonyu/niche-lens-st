@@ -8,7 +8,7 @@
 
 | method | domain_ari | domain_ami | domain_nmi | domain_macro_f1 | domain_homogeneity | domain_accuracy | embedding_silhouette | niche_morans_i |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| niche-lens-st | NA | NA | NA | NA | NA | NA | 0.2053 | 0.5890 |
+| niche-lens-st | NA | NA | NA | NA | NA | NA | 0.2426 | 0.4230 |
 | diffusion | NA | NA | NA | NA | NA | NA | 0.1071 | 0.8240 |
 | neighborhood | NA | NA | NA | NA | NA | NA | 0.0956 | 0.4214 |
 | pca | NA | NA | NA | NA | NA | NA | 0.1568 | 0.2709 |
