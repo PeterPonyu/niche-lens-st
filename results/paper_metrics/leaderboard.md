@@ -1,4 +1,4 @@
-## N-T1 Multi-Method Niche Leaderboard
+## N-T1 Niche Leaderboard — PRELIMINARY, NOT A VALIDATION (published baseline not run; internal-reimplementation rows; intrinsic metrics only; spatial-domain metrics not emitted)
 
 **Dataset:** `niche_merfish_slice`
 
@@ -13,4 +13,4 @@
 | neighborhood | NA | NA | NA | NA | NA | NA | 0.0956 | 0.4214 |
 | pca | NA | NA | NA | NA | NA | NA | 0.1568 | 0.2709 |
 
-*Columns: domain_ari, domain_ami, domain_nmi, domain_macro_f1, domain_homogeneity, domain_accuracy, embedding_silhouette, niche_morans_i. NA = metric absent or not applicable for this method.*
+*Columns: domain_ari, domain_ami, domain_nmi, domain_macro_f1, domain_homogeneity, domain_accuracy, embedding_silhouette, niche_morans_i. NA = NOT COMPUTED for this published artifact (no executed spatial-domain GT scoring) — means 'not run / no GT', NOT 'not applicable'.*
