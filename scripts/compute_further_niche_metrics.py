@@ -402,20 +402,35 @@ def main() -> int:
     # of run_metadata keys plus ``interpretability``; ``gt_source`` is recorded
     # INSIDE ``interpretability`` so the provenance survives the contract (the
     # contract is byte-identical and must not be edited).
+    #
+    # ``gt_is_real_labels`` must NOT be an unconditional True (leaderboard-honesty
+    # gate): it may be True ONLY when this run actually emits the domain_* GT
+    # scoring metrics into the merged metrics. If a future code path skips
+    # _clustering_agreement (or emits None), the flag correctly degrades to False
+    # so downstream consumers do not treat an un-scored run as GT-validated.
+    _DOMAIN_GT_METRICS = (
+        "domain_ari",
+        "domain_nmi",
+        "domain_ami",
+        "domain_homogeneity",
+        "domain_macro_f1",
+        "domain_accuracy",
+    )
+    domain_metrics_emitted = all(
+        merged_metrics.get(_m) is not None for _m in _DOMAIN_GT_METRICS
+    )
     gt_source = {
         "clustering_agreement": {
-            "metrics": [
-                "domain_ari",
-                "domain_nmi",
-                "domain_ami",
-                "domain_homogeneity",
-                "domain_macro_f1",
-                "domain_accuracy",
-            ],
+            "metrics": list(_DOMAIN_GT_METRICS),
             "gt_obs_column": DOMAIN_COL,
             "gt_n_classes": n_regions,
             "gt_class_names": domain_names,
-            "gt_is_real_labels": True,
+            "gt_is_real_labels": bool(domain_metrics_emitted),
+            "claim_scope": (
+                "annotation_concordance_only: prototype_id vs Moffitt anatomical "
+                "region labels; not biological niche accuracy and not published "
+                "evidence unless this run also emits domain_* metrics"
+            ),
             "alignment": "Hungarian match_labels (scipy linear_sum_assignment) for F1/accuracy only",
             "note": (
                 "GT-backed: prototype_id vs REAL obs['domain'] (Moffitt 2018 "

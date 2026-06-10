@@ -247,7 +247,7 @@ def _emit_md(
     sep_row = "| " + " | ".join(["---"] * len(cols)) + " |"
 
     parts: list[str] = [
-        "## N-T1 Multi-Method Niche Leaderboard",
+        "## N-T1 Niche Leaderboard — PRELIMINARY, NOT A VALIDATION (published baseline not run; internal-reimplementation rows; intrinsic metrics only; spatial-domain metrics not emitted)",
         "",
         f"**Dataset:** `{dataset_card_id}`",
     ]
@@ -271,7 +271,8 @@ def _emit_md(
     parts += [
         "",
         f"*Columns: {', '.join(LEADERBOARD_COLS)}. "
-        "NA = metric absent or not applicable for this method.*",
+        "NA = NOT COMPUTED for this published artifact (no executed spatial-domain GT scoring) "
+        "— means 'not run / no GT', NOT 'not applicable'.*",
     ]
     _atomic_write(path, "\n".join(parts) + "\n")
 
